@@ -108,64 +108,72 @@ function ServicesPage() {
                 <Link
                   to="/attendance/$serviceId"
                   params={{ serviceId: service.id }}
-                  className="flex flex-1 items-center gap-4 p-4 sm:p-5"
+                  className="flex min-w-0 flex-1 items-start gap-3 p-3.5 sm:items-center sm:gap-4 sm:p-5"
                 >
-                  <div className="bg-secondary text-secondary-foreground grid h-14 w-14 shrink-0 place-items-center rounded-2xl">
-                    <span className="text-[10px] tracking-widest uppercase opacity-70">
+                  {/* Date Badge */}
+                  <div className="bg-secondary text-secondary-foreground grid h-12 w-12 shrink-0 place-items-center rounded-xl sm:h-14 sm:w-14 sm:rounded-2xl">
+                    <span className="text-[9px] tracking-wider uppercase opacity-70 sm:text-[10px] sm:tracking-widest">
                       {format(parseISO(service.date), "MMM")}
                     </span>
-                    <span className="font-display -mt-0.5 text-xl leading-none font-semibold">
+                    <span className="font-display -mt-0.5 text-lg leading-none font-semibold sm:text-xl">
                       {format(parseISO(service.date), "d")}
                     </span>
                   </div>
+
+                  {/* Title and Metadata */}
                   <div className="min-w-0 flex-1">
-                    <div className="truncate font-semibold">{service.name}</div>
-                    <div className="text-muted-foreground mt-0.5 flex flex-wrap items-center gap-2 text-xs">
-                      {service.type === "recurring" ? (
-                        <>
-                          <Repeat className="h-3 w-3" /> Recurring
-                        </>
-                      ) : (
-                        <>One-off</>
-                      )}
+                    <div className="truncate text-sm font-semibold sm:text-base">{service.name}</div>
+                    <div className="text-muted-foreground mt-1 flex flex-wrap items-center gap-1.5 text-xs sm:mt-0.5 sm:gap-2">
+                      <span className="inline-flex items-center gap-1">
+                        {service.type === "recurring" ? (
+                          <>
+                            <Repeat className="h-3 w-3" /> Recurring
+                          </>
+                        ) : (
+                          <>One-off</>
+                        )}
+                      </span>
                       <span aria-hidden>·</span>
-                      {format(parseISO(service.date), "EEEE d MMMM yyyy")}
+                      <span>{format(parseISO(service.date), "EEE d MMM yyyy")}</span>
                       {visitors > 0 && (
                         <>
                           <span aria-hidden>·</span>
-                          <span className="bg-accent/15 text-accent-foreground flex items-center gap-1 rounded-full px-2 py-0.5 font-medium">
+                          <span className="bg-accent/15 text-accent-foreground inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-medium text-[11px]">
                             <Users className="h-3 w-3" /> +{visitors} visitors
                           </span>
                         </>
                       )}
                     </div>
                   </div>
-                  <div className="text-right">
+
+                  {/* Attendance Count / Stats */}
+                  <div className="shrink-0 text-right">
                     {pct === null ? (
-                      <span className="bg-accent/15 text-accent-foreground rounded-full px-3 py-1 text-xs font-semibold">
+                      <span className="bg-accent/15 text-accent-foreground inline-block rounded-full px-2.5 py-1 text-[11px] font-semibold sm:px-3 sm:text-xs">
                         Not taken
                       </span>
                     ) : (
                       <>
-                        <div className="font-display text-primary text-xl font-semibold">
+                        <div className="font-display text-primary text-lg font-semibold sm:text-xl">
                           {totalPresent}
                         </div>
-                        <div className="text-muted-foreground text-xs">
-                          {count!.present}/{count!.total} members ({pct}%)
+                        <div className="text-muted-foreground text-[10px] sm:text-xs">
+                          {count!.present}/{count!.total} ({pct}%)
                         </div>
                       </>
                     )}
                   </div>
-                  <ChevronRight className="text-muted-foreground h-4 w-4 shrink-0" />
+                  <ChevronRight className="text-muted-foreground hidden h-4 w-4 shrink-0 sm:block" />
                 </Link>
 
-                <div className="pr-3">
+                {/* Actions Menu */}
+                <div className="pr-2 sm:pr-3">
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="text-muted-foreground hover:text-foreground h-9 w-9 rounded-full"
+                        className="text-muted-foreground hover:text-foreground h-8 w-8 rounded-full sm:h-9 sm:w-9"
                         aria-label="Service actions"
                       >
                         <MoreVertical className="h-4 w-4" />
@@ -264,11 +272,11 @@ function NewServiceDialog() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button size="lg" className="h-12">
+        <Button size="lg" className="h-11 sm:h-12">
           <CalendarPlus className="mr-2 h-4 w-4" /> New service
         </Button>
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>New service</DialogTitle>
         </DialogHeader>
@@ -393,7 +401,7 @@ function EditServiceDialog({
 
   return (
     <Dialog open={Boolean(service)} onOpenChange={(next) => !next && onClose()}>
-      <DialogContent>
+      <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Edit service</DialogTitle>
           <DialogDescription>Update the name, date, or type of this service.</DialogDescription>
@@ -482,7 +490,7 @@ function DeleteServiceDialog({
 
   return (
     <Dialog open={Boolean(service)} onOpenChange={(next) => !next && onClose()}>
-      <DialogContent>
+      <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Delete service?</DialogTitle>
           <DialogDescription>
