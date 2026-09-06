@@ -2,7 +2,14 @@ import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { addMonths, format, isSameMonth, parseISO } from "date-fns";
-import { AlertTriangle, ChevronLeft, ChevronRight, Phone, HeartHandshake, CheckCircle2 } from "lucide-react";
+import {
+  AlertTriangle,
+  ChevronLeft,
+  ChevronRight,
+  Phone,
+  HeartHandshake,
+  CheckCircle2,
+} from "lucide-react";
 import {
   Bar,
   BarChart,
@@ -181,7 +188,12 @@ function ReportsPage() {
         // 4. In a 2-service month: Missed both services
         const isMissedBothInTwo = total === 2 && presentCount === 0;
 
-        if (!isProlongedAbsence && !isCompleteInactivity && !isChronicLowAttendance && !isMissedBothInTwo) {
+        if (
+          !isProlongedAbsence &&
+          !isCompleteInactivity &&
+          !isChronicLowAttendance &&
+          !isMissedBothInTwo
+        ) {
           return null;
         }
 
@@ -406,7 +418,10 @@ function ReportsPage() {
                   const isCritical = row.severity === "critical";
 
                   return (
-                    <li key={row.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 py-3.5">
+                    <li
+                      key={row.id}
+                      className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 py-3.5"
+                    >
                       <div className="flex items-start gap-3 min-w-0">
                         <div
                           className={`mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-xl text-xs font-bold ${
@@ -420,7 +435,9 @@ function ReportsPage() {
 
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-2">
-                            <span className="font-semibold text-sm text-foreground">{row.name}</span>
+                            <span className="font-semibold text-sm text-foreground">
+                              {row.name}
+                            </span>
                             <span
                               className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
                                 isCritical
@@ -452,7 +469,9 @@ function ReportsPage() {
 
                       <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0 pt-2 sm:pt-0 border-t border-border/30 sm:border-t-0">
                         <div className="text-right">
-                          <div className="text-[10px] uppercase text-muted-foreground font-medium">Attendance</div>
+                          <div className="text-[10px] uppercase text-muted-foreground font-medium">
+                            Attendance
+                          </div>
                           <div className="font-semibold text-sm text-foreground">
                             {row.presentCount} / {row.total} services
                           </div>

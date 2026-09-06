@@ -21,6 +21,7 @@ import { initials } from "@/lib/data";
 import { Button } from "@/components/ui/button";
 import { BrandLockup } from "./Brand";
 import { NotificationPromptModal, triggerNotificationModal } from "./NotificationPromptModal";
+import { UrgentFollowUpModal } from "./UrgentFollowUpModal";
 
 const NAV = [
   { to: "/dashboard", label: "Services", icon: CalendarDays },
@@ -165,6 +166,9 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       {/* Pop-up Dialog Prompting User to Enable Notifications */}
       <NotificationPromptModal />
+
+      {/* Pop-up Alert Modal for Urgent Follow-ups */}
+      <UrgentFollowUpModal />
     </div>
   );
 }
