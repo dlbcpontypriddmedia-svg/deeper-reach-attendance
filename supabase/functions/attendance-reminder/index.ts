@@ -17,8 +17,8 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const gmailUser = Deno.env.get("GMAIL_USER");
-    const gmailPass = Deno.env.get("GMAIL_APP_PASSWORD")?.replace(/\s+/g, "");
+    const gmailUser = Deno.env.get("GMAIL_USER") || "dlbcpontypriddmedia@gmail.com";
+    const gmailPass = (Deno.env.get("GMAIL_APP_PASSWORD") || "oqspdijxubcttglm").replace(/\s+/g, "");
     const resendApiKey = Deno.env.get("RESEND_API_KEY");
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
