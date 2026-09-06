@@ -19,7 +19,12 @@ import {
 } from "lucide-react";
 
 import { auditLogsQuery, type AuditLog } from "@/lib/audit";
-import { CATEGORY_LABELS, initials, normalizeMemberCategory, type MemberCategory } from "@/lib/data";
+import {
+  CATEGORY_LABELS,
+  initials,
+  normalizeMemberCategory,
+  type MemberCategory,
+} from "@/lib/data";
 import { PageHeading } from "@/components/app/AppShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -233,20 +238,30 @@ function DetailsSummary({ log }: { log: AuditLog }) {
         )}
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           <div className="surface p-2.5 rounded-lg text-center">
-            <div className="text-muted-foreground text-[10px] uppercase font-medium">Total Present</div>
-            <div className="text-primary text-base font-bold">{String(details.total_present ?? "-")}</div>
+            <div className="text-muted-foreground text-[10px] uppercase font-medium">
+              Total Present
+            </div>
+            <div className="text-primary text-base font-bold">
+              {String(details.total_present ?? "-")}
+            </div>
           </div>
           <div className="surface p-2.5 rounded-lg text-center">
             <div className="text-muted-foreground text-[10px] uppercase font-medium">Members</div>
-            <div className="text-success text-base font-bold">{String(details.members_present ?? "-")}</div>
+            <div className="text-success text-base font-bold">
+              {String(details.members_present ?? "-")}
+            </div>
           </div>
           <div className="surface p-2.5 rounded-lg text-center">
             <div className="text-muted-foreground text-[10px] uppercase font-medium">Visitors</div>
-            <div className="text-accent-foreground text-base font-bold">{String(details.visitors ?? "0")}</div>
+            <div className="text-accent-foreground text-base font-bold">
+              {String(details.visitors ?? "0")}
+            </div>
           </div>
           <div className="surface p-2.5 rounded-lg text-center">
             <div className="text-muted-foreground text-[10px] uppercase font-medium">Absentees</div>
-            <div className="text-destructive text-base font-bold">{String(details.members_absent ?? "-")}</div>
+            <div className="text-destructive text-base font-bold">
+              {String(details.members_absent ?? "-")}
+            </div>
           </div>
         </div>
       </div>
@@ -281,12 +296,14 @@ function DetailsSummary({ log }: { log: AuditLog }) {
         <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
           {details.service_date && (
             <span>
-              Service Date: <strong className="text-foreground">{String(details.service_date)}</strong>
+              Service Date:{" "}
+              <strong className="text-foreground">{String(details.service_date)}</strong>
             </span>
           )}
           {details.recipients_count !== undefined && (
             <span>
-              Total Recipients: <strong className="text-foreground">{String(details.recipients_count)}</strong>
+              Total Recipients:{" "}
+              <strong className="text-foreground">{String(details.recipients_count)}</strong>
             </span>
           )}
         </div>
@@ -380,27 +397,36 @@ function DetailsSummary({ log }: { log: AuditLog }) {
     return (
       <div className="surface p-3.5 rounded-xl border-l-4 border-sky-500 space-y-2">
         <div className="text-xs font-bold text-sky-700 dark:text-sky-300 uppercase tracking-wide">
-          Member Changes: <strong className="text-foreground font-semibold lowercase tracking-normal">{String(newD.name || oldD.name || log.entity_title)}</strong>
+          Member Changes:{" "}
+          <strong className="text-foreground font-semibold lowercase tracking-normal">
+            {String(newD.name || oldD.name || log.entity_title)}
+          </strong>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
           {oldD.name !== newD.name && (
             <div>
-              <span className="text-muted-foreground">Name:</span> {String(oldD.name)} → <strong className="text-foreground">{String(newD.name)}</strong>
+              <span className="text-muted-foreground">Name:</span> {String(oldD.name)} →{" "}
+              <strong className="text-foreground">{String(newD.name)}</strong>
             </div>
           )}
           {oldD.category !== newD.category && (
             <div>
-              <span className="text-muted-foreground">Category:</span> {formatCategory(oldD.category)} → <strong className="text-foreground">{formatCategory(newD.category)}</strong>
+              <span className="text-muted-foreground">Category:</span>{" "}
+              {formatCategory(oldD.category)} →{" "}
+              <strong className="text-foreground">{formatCategory(newD.category)}</strong>
             </div>
           )}
           {oldD.gender !== newD.gender && (
             <div>
-              <span className="text-muted-foreground">Gender:</span> {String(oldD.gender)} → <strong className="text-foreground">{String(newD.gender)}</strong>
+              <span className="text-muted-foreground">Gender:</span> {String(oldD.gender)} →{" "}
+              <strong className="text-foreground">{String(newD.gender)}</strong>
             </div>
           )}
           {oldD.is_worker !== newD.is_worker && (
             <div>
-              <span className="text-muted-foreground">Worker Status:</span> {oldD.is_worker ? "Worker" : "Member"} → <strong className="text-foreground">{newD.is_worker ? "Worker" : "Member"}</strong>
+              <span className="text-muted-foreground">Worker Status:</span>{" "}
+              {oldD.is_worker ? "Worker" : "Member"} →{" "}
+              <strong className="text-foreground">{newD.is_worker ? "Worker" : "Member"}</strong>
             </div>
           )}
         </div>
@@ -415,11 +441,21 @@ function DetailsSummary({ log }: { log: AuditLog }) {
           <span className="text-xs font-bold text-emerald-700 dark:text-emerald-300 uppercase tracking-wide">
             Service Created:
           </span>
-          <strong className="text-foreground text-sm font-semibold">{String(details.name || log.entity_title)}</strong>
+          <strong className="text-foreground text-sm font-semibold">
+            {String(details.name || log.entity_title)}
+          </strong>
         </div>
         <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-          {details.date && <span>Date: <strong className="text-foreground">{String(details.date)}</strong></span>}
-          {details.type && <span className="capitalize">· Type: <strong className="text-foreground">{String(details.type)}</strong></span>}
+          {details.date && (
+            <span>
+              Date: <strong className="text-foreground">{String(details.date)}</strong>
+            </span>
+          )}
+          {details.type && (
+            <span className="capitalize">
+              · Type: <strong className="text-foreground">{String(details.type)}</strong>
+            </span>
+          )}
           {typeof details.count === "number" && details.count > 1 && (
             <span>· ({details.count} recurring services generated)</span>
           )}
@@ -459,12 +495,16 @@ function DetailsSummary({ log }: { log: AuditLog }) {
           <span className="text-xs font-bold text-rose-700 dark:text-rose-300 uppercase tracking-wide">
             Service Deleted:
           </span>
-          <strong className="text-foreground text-sm font-semibold">{String(details.name || log.entity_title)}</strong>
+          <strong className="text-foreground text-sm font-semibold">
+            {String(details.name || log.entity_title)}
+          </strong>
         </div>
         <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
           {details.date && <span>Date: {String(details.date)}</span>}
           {details.type && <span className="capitalize">· Type: {String(details.type)}</span>}
-          {details.visitors !== undefined && <span>· Visitors snapshot: {String(details.visitors)}</span>}
+          {details.visitors !== undefined && (
+            <span>· Visitors snapshot: {String(details.visitors)}</span>
+          )}
         </div>
       </div>
     );
@@ -477,11 +517,18 @@ function DetailsSummary({ log }: { log: AuditLog }) {
           <span className="text-xs font-bold text-amber-700 dark:text-amber-300 uppercase tracking-wide">
             Role Assignment:
           </span>
-          <span className="text-sm font-semibold text-foreground">{log.entity_title || "Account"}</span>
+          <span className="text-sm font-semibold text-foreground">
+            {log.entity_title || "Account"}
+          </span>
         </div>
         <div className="text-xs text-muted-foreground">
-          Assigned Role: <span className="capitalize font-semibold text-foreground">{String(details.role || "-")}</span>
-          {details.action === "account_created" && <span className="ml-2 text-[11px]">(New account created)</span>}
+          Assigned Role:{" "}
+          <span className="capitalize font-semibold text-foreground">
+            {String(details.role || "-")}
+          </span>
+          {details.action === "account_created" && (
+            <span className="ml-2 text-[11px]">(New account created)</span>
+          )}
         </div>
       </div>
     );
@@ -499,7 +546,9 @@ function DetailsSummary({ log }: { log: AuditLog }) {
       {entries.map(([key, val]) => (
         <div key={key}>
           <span className="text-muted-foreground capitalize">{key.replace(/_/g, " ")}:</span>{" "}
-          <strong className="text-foreground">{typeof val === "object" ? JSON.stringify(val) : String(val)}</strong>
+          <strong className="text-foreground">
+            {typeof val === "object" ? JSON.stringify(val) : String(val)}
+          </strong>
         </div>
       ))}
     </div>
