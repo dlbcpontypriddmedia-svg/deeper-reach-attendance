@@ -15,7 +15,13 @@ import {
   YAxis,
 } from "recharts";
 
-import { attendanceQuery, buildHouseholds, membersQuery, servicesQuery } from "@/lib/data";
+import {
+  attendanceQuery,
+  buildHouseholds,
+  getServiceVisitorTotal,
+  membersQuery,
+  servicesQuery,
+} from "@/lib/data";
 import { PageHeading } from "@/components/app/AppShell";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -86,31 +92,43 @@ function ReportsPage() {
 
   const trend = monthServices.map((service) => {
     const rows = scoped.filter((r) => r.service_id === service.id);
-    const present = rows.filter((r) => r.status === "present").length;
+    const memberPresent = rows.filter((r) => r.status === "present").length;
+    const visitors = !focusMemberIds && scope === "everyone" ? getServiceVisitorTotal(service) : 0;
+    const present = memberPresent + visitors;
+    const total = rows.length + visitors;
     return {
       label: format(parseISO(service.date), "d MMM"),
       name: service.name,
       type: service.type,
       present,
-      total: rows.length,
-      percent: rows.length ? Math.round((present / rows.length) * 100) : 0,
+      total,
+      percent: total ? Math.round((present / total) * 100) : 0,
     };
   });
 
   const byType = (["recurring", "one_off"] as const).map((type) => {
-    const rows = scoped.filter((r) =>
-      monthServices.some((s) => s.id === r.service_id && s.type === type),
-    );
-    const present = rows.filter((r) => r.status === "present").length;
+    const matchingServices = monthServices.filter((s) => s.type === type);
+    const rows = scoped.filter((r) => matchingServices.some((s) => s.id === r.service_id));
+    const memberPresent = rows.filter((r) => r.status === "present").length;
+    const visitors =
+      !focusMemberIds && scope === "everyone"
+        ? matchingServices.reduce((sum, s) => sum + getServiceVisitorTotal(s), 0)
+        : 0;
+    const present = memberPresent + visitors;
+    const total = rows.length + visitors;
     return {
       label: type === "recurring" ? "Recurring" : "One-off",
-      percent: rows.length ? Math.round((present / rows.length) * 100) : 0,
-      services: monthServices.filter((s) => s.type === type).length,
+      percent: total ? Math.round((present / total) * 100) : 0,
+      services: matchingServices.length,
     };
   });
 
-  const totalRows = scoped.length;
-  const totalPresent = scoped.filter((r) => r.status === "present").length;
+  const totalVisitors =
+    !focusMemberIds && scope === "everyone"
+      ? monthServices.reduce((sum, s) => sum + getServiceVisitorTotal(s), 0)
+      : 0;
+  const totalRows = scoped.length + totalVisitors;
+  const totalPresent = scoped.filter((r) => r.status === "present").length + totalVisitors;
   const overall = totalRows ? Math.round((totalPresent / totalRows) * 100) : 0;
 
   const concerns = useMemo(() => {

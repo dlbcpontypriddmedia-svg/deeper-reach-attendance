@@ -113,6 +113,18 @@ export async function fetchAttendance(serviceId?: string) {
   return data ?? [];
 }
 
+export function getServiceVisitorTotal(service?: Partial<Service> | null): number {
+  if (!service) return 0;
+  return (
+    (service.visitor_adult_male ?? 0) +
+    (service.visitor_adult_female ?? 0) +
+    (service.visitor_youth_male ?? 0) +
+    (service.visitor_youth_female ?? 0) +
+    (service.visitor_child_male ?? 0) +
+    (service.visitor_child_female ?? 0)
+  );
+}
+
 export const membersQuery = { queryKey: ["members"], queryFn: fetchMembers };
 export const servicesQuery = { queryKey: ["services"], queryFn: fetchServices };
 export const attendanceQuery = { queryKey: ["attendance"], queryFn: () => fetchAttendance() };

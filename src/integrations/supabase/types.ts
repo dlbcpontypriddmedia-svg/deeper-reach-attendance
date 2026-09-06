@@ -133,6 +133,13 @@ export type Database = {
           name: string;
           type: Database["public"]["Enums"]["service_type"];
           updated_at: string;
+          visitor_adult_male: number;
+          visitor_adult_female: number;
+          visitor_youth_male: number;
+          visitor_youth_female: number;
+          visitor_child_male: number;
+          visitor_child_female: number;
+          visitor_notes: string | null;
         };
         Insert: {
           created_at?: string;
@@ -142,6 +149,13 @@ export type Database = {
           name: string;
           type?: Database["public"]["Enums"]["service_type"];
           updated_at?: string;
+          visitor_adult_male?: number;
+          visitor_adult_female?: number;
+          visitor_youth_male?: number;
+          visitor_youth_female?: number;
+          visitor_child_male?: number;
+          visitor_child_female?: number;
+          visitor_notes?: string | null;
         };
         Update: {
           created_at?: string;
@@ -151,6 +165,13 @@ export type Database = {
           name?: string;
           type?: Database["public"]["Enums"]["service_type"];
           updated_at?: string;
+          visitor_adult_male?: number;
+          visitor_adult_female?: number;
+          visitor_youth_male?: number;
+          visitor_youth_female?: number;
+          visitor_child_male?: number;
+          visitor_child_female?: number;
+          visitor_notes?: string | null;
         };
         Relationships: [];
       };

@@ -1,8 +1,8 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
-import { Check, ChevronDown, X, ArrowLeft, Search, Copy } from "lucide-react";
+import { Check, ChevronDown, X, ArrowLeft, Search, Copy, Users, Minus, Plus } from "lucide-react";
 import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -12,13 +12,16 @@ import {
   buildHouseholds,
   fetchAttendance,
   fetchService,
+  getServiceVisitorTotal,
   membersQuery,
   normalizeMemberCategory,
   type Member,
   type MemberCategory,
+  type Service,
 } from "@/lib/data";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { PageHeading } from "@/components/app/AppShell";
 import { buildAttendanceSummary } from "@/lib/summary";
 
@@ -47,6 +50,17 @@ function AttendancePage() {
   const [submitted, setSubmitted] = useState(false);
   const [editing, setEditing] = useState(false);
 
+  // Visitors / Guests state
+  const [visitors, setVisitors] = useState({
+    adult_male: 0,
+    adult_female: 0,
+    youth_male: 0,
+    youth_female: 0,
+    child_male: 0,
+    child_female: 0,
+    notes: "",
+  });
+
   const service = useQuery({
     queryKey: ["service", serviceId],
     queryFn: () => fetchService(serviceId),
@@ -56,6 +70,21 @@ function AttendancePage() {
     queryKey: ["attendance", serviceId],
     queryFn: () => fetchAttendance(serviceId),
   });
+
+  // Sync visitor state when service is loaded
+  useEffect(() => {
+    if (service.data) {
+      setVisitors({
+        adult_male: service.data.visitor_adult_male ?? 0,
+        adult_female: service.data.visitor_adult_female ?? 0,
+        youth_male: service.data.visitor_youth_male ?? 0,
+        youth_female: service.data.visitor_youth_female ?? 0,
+        child_male: service.data.visitor_child_male ?? 0,
+        child_female: service.data.visitor_child_female ?? 0,
+        notes: service.data.visitor_notes ?? "",
+      });
+    }
+  }, [service.data]);
 
   const baseline = useMemo(() => {
     const map: Record<string, Status> = {};
@@ -123,9 +152,17 @@ function AttendancePage() {
       : (sectionKeys[section] ?? true);
   };
 
-  const presentCount = allMembers.filter((m) => statusOf(m.id) === "present").length;
-  const total = allMembers.length;
-  const pct = total ? Math.round((presentCount / total) * 100) : 0;
+  const memberPresentCount = allMembers.filter((m) => statusOf(m.id) === "present").length;
+  const totalVisitors =
+    visitors.adult_male +
+    visitors.adult_female +
+    visitors.youth_male +
+    visitors.youth_female +
+    visitors.child_male +
+    visitors.child_female;
+  const totalPresent = memberPresentCount + totalVisitors;
+  const totalMembers = allMembers.length;
+  const pct = totalMembers ? Math.round((memberPresentCount / totalMembers) * 100) : 0;
 
   const setMany = (ids: string[], status: Status) =>
     setStatuses((prev) => {
@@ -137,19 +174,40 @@ function AttendancePage() {
   const submit = useMutation({
     mutationFn: async () => {
       const { data: session } = await supabase.auth.getUser();
-      const rows = allMembers.map((member) => ({
-        service_id: serviceId,
-        member_id: member.id,
-        status: statusOf(member.id),
-        recorded_by: session.user?.id ?? null,
-      }));
-      const { error } = await supabase
-        .from("attendance_records")
-        .upsert(rows, { onConflict: "service_id,member_id" });
-      if (error) throw new Error(error.message);
+
+      // Update visitor counts on service
+      const { error: serviceError } = await supabase
+        .from("services")
+        .update({
+          visitor_adult_male: visitors.adult_male,
+          visitor_adult_female: visitors.adult_female,
+          visitor_youth_male: visitors.youth_male,
+          visitor_youth_female: visitors.youth_female,
+          visitor_child_male: visitors.child_male,
+          visitor_child_female: visitors.child_female,
+          visitor_notes: visitors.notes.trim() || null,
+        })
+        .eq("id", serviceId);
+
+      if (serviceError) throw new Error(serviceError.message);
+
+      if (allMembers.length > 0) {
+        const rows = allMembers.map((member) => ({
+          service_id: serviceId,
+          member_id: member.id,
+          status: statusOf(member.id),
+          recorded_by: session.user?.id ?? null,
+        }));
+        const { error } = await supabase
+          .from("attendance_records")
+          .upsert(rows, { onConflict: "service_id,member_id" });
+        if (error) throw new Error(error.message);
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["attendance"] });
+      queryClient.invalidateQueries({ queryKey: ["service", serviceId] });
+      queryClient.invalidateQueries({ queryKey: ["services"] });
       setSubmitted(true);
       toast.success("Attendance submitted");
     },
@@ -161,15 +219,14 @@ function AttendancePage() {
   const alreadyRecorded = (existing.data ?? []).length > 0;
   const locked = (submitted || alreadyRecorded) && !editing;
 
-  if (existing.isPending || members.isPending) {
+  if (existing.isPending || members.isPending || service.isPending) {
     return <p className="text-muted-foreground py-16 text-center text-sm">Loading...</p>;
   }
 
   if (locked) {
     return (
       <ServiceOverview
-        title={service.data?.name ?? "Service"}
-        date={service.data?.date}
+        service={service.data}
         all={allMembers}
         statusOf={statusOf}
         absentees={absentees}
@@ -235,6 +292,12 @@ function AttendancePage() {
         </Button>
       </div>
 
+      {/* Visitor / Guest Count Section for Special / Combined Sundays */}
+      <VisitorSection
+        visitors={visitors}
+        onChange={(field, val) => setVisitors((prev) => ({ ...prev, [field]: val }))}
+      />
+
       <ul className="space-y-3 pb-32">
         {CATEGORY_ORDER.map((category) => {
           const hasMale = grouped[category].male.length > 0;
@@ -279,26 +342,192 @@ function AttendancePage() {
         )}
       </ul>
 
-      <div className="border-border bg-background/95 fixed inset-x-0 bottom-0 border-t backdrop-blur">
+      <div className="border-border bg-background/95 fixed inset-x-0 bottom-0 border-t backdrop-blur z-20">
         <div className="mx-auto flex w-full max-w-6xl items-center gap-4 px-4 py-3 sm:px-6">
           <div className="flex-1">
             <div className="font-display text-xl font-semibold">
-              {presentCount}
-              <span className="text-muted-foreground text-sm font-normal"> / {total} present</span>
+              {totalPresent}
+              <span className="text-muted-foreground text-sm font-normal">
+                {" "}
+                total present ({memberPresentCount} members
+                {totalVisitors > 0 ? ` + ${totalVisitors} visitors` : ""})
+              </span>
             </div>
-            <div className="text-muted-foreground text-xs">{pct}% attendance</div>
+            <div className="text-muted-foreground text-xs">{pct}% member attendance</div>
           </div>
           <Button
             size="lg"
             className="h-13 flex-1 py-4 text-base sm:flex-none sm:px-10"
             onClick={() => submit.mutate()}
-            disabled={submit.isPending || total === 0}
+            disabled={submit.isPending}
           >
             {editing ? "Resubmit attendance" : "Submit attendance"}
           </Button>
         </div>
       </div>
     </>
+  );
+}
+
+function VisitorSection({
+  visitors,
+  onChange,
+}: {
+  visitors: {
+    adult_male: number;
+    adult_female: number;
+    youth_male: number;
+    youth_female: number;
+    child_male: number;
+    child_female: number;
+    notes: string;
+  };
+  onChange: (field: keyof typeof visitors, val: number | string) => void;
+}) {
+  const [open, setOpen] = useState(
+    visitors.adult_male > 0 ||
+      visitors.adult_female > 0 ||
+      visitors.youth_male > 0 ||
+      visitors.youth_female > 0 ||
+      visitors.child_male > 0 ||
+      visitors.child_female > 0 ||
+      Boolean(visitors.notes),
+  );
+
+  const total =
+    visitors.adult_male +
+    visitors.adult_female +
+    visitors.youth_male +
+    visitors.youth_female +
+    visitors.child_male +
+    visitors.child_female;
+
+  return (
+    <div className="surface mb-4 overflow-hidden border-dashed border-2 border-primary/30">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="flex w-full items-center justify-between gap-3 p-4 hover:bg-secondary/40 transition-colors"
+      >
+        <div className="flex items-center gap-2">
+          <Users className="text-primary h-5 w-5" />
+          <span className="font-semibold">Special Sunday Guests & Visiting Branches</span>
+          <span className="bg-primary/10 text-primary rounded-full px-2.5 py-0.5 text-xs font-semibold">
+            {total} {total === 1 ? "visitor" : "visitors"}
+          </span>
+        </div>
+        <ChevronDown className={`h-5 w-5 transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+
+      {open && (
+        <div className="border-border bg-secondary/30 space-y-4 border-t p-4 sm:p-5">
+          <p className="text-muted-foreground text-xs">
+            Use these counters for one-time attendees, combined services, or guests so you don't
+            need to create permanent member profiles.
+          </p>
+
+          <div className="grid gap-3 sm:grid-cols-3">
+            {/* Adults */}
+            <div className="surface p-3 space-y-2">
+              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Adult Visitors
+              </span>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-sm">Male:</span>
+                <Counter value={visitors.adult_male} onChange={(v) => onChange("adult_male", v)} />
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-sm">Female:</span>
+                <Counter
+                  value={visitors.adult_female}
+                  onChange={(v) => onChange("adult_female", v)}
+                />
+              </div>
+            </div>
+
+            {/* Youth */}
+            <div className="surface p-3 space-y-2">
+              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Youth Visitors
+              </span>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-sm">Male:</span>
+                <Counter value={visitors.youth_male} onChange={(v) => onChange("youth_male", v)} />
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-sm">Female:</span>
+                <Counter
+                  value={visitors.youth_female}
+                  onChange={(v) => onChange("youth_female", v)}
+                />
+              </div>
+            </div>
+
+            {/* Children */}
+            <div className="surface p-3 space-y-2">
+              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Child Visitors
+              </span>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-sm">Male:</span>
+                <Counter value={visitors.child_male} onChange={(v) => onChange("child_male", v)} />
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-sm">Female:</span>
+                <Counter
+                  value={visitors.child_female}
+                  onChange={(v) => onChange("child_female", v)}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="visitor-notes" className="text-xs">
+              Guest / Branch notes (optional)
+            </Label>
+            <Input
+              id="visitor-notes"
+              placeholder="e.g., Visiting brethren from Central Branch"
+              value={visitors.notes}
+              onChange={(e) => onChange("notes", e.target.value)}
+              className="h-10 bg-background"
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Counter({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <button
+        type="button"
+        onClick={() => onChange(Math.max(0, value - 1))}
+        className="border-border hover:bg-secondary grid h-8 w-8 place-items-center rounded-lg border text-sm font-semibold transition-colors disabled:opacity-40"
+        disabled={value <= 0}
+        aria-label="Decrease"
+      >
+        <Minus className="h-3.5 w-3.5" />
+      </button>
+      <input
+        type="number"
+        min={0}
+        value={value}
+        onChange={(e) => onChange(Math.max(0, Number(e.target.value) || 0))}
+        className="surface h-8 w-12 text-center text-sm font-semibold focus:outline-none"
+      />
+      <button
+        type="button"
+        onClick={() => onChange(value + 1)}
+        className="border-border hover:bg-secondary grid h-8 w-8 place-items-center rounded-lg border text-sm font-semibold transition-colors"
+        aria-label="Increase"
+      >
+        <Plus className="h-3.5 w-3.5" />
+      </button>
+    </div>
   );
 }
 
@@ -415,16 +644,14 @@ function AttendanceSection({
 }
 
 function ServiceOverview({
-  title,
-  date,
+  service,
   all,
   statusOf,
   absentees,
   households,
   onEdit,
 }: {
-  title: string;
-  date?: string | undefined;
+  service?: Service | null;
   all: Member[];
   statusOf: (id: string) => Status;
   absentees: Member[];
@@ -434,6 +661,10 @@ function ServiceOverview({
   const householdOf = (memberId: string) =>
     households.find((h) => h.members.some((m) => m.id === memberId))?.label ?? "Unknown";
 
+  const memberPresent = all.filter((m) => statusOf(m.id) === "present").length;
+  const visitorTotal = getServiceVisitorTotal(service);
+  const totalPresent = memberPresent + visitorTotal;
+
   const summarise = (rows: Member[]) => {
     const present = rows.filter((m) => statusOf(m.id) === "present").length;
     return {
@@ -442,13 +673,16 @@ function ServiceOverview({
       pct: rows.length ? Math.round((present / rows.length) * 100) : 0,
     };
   };
+
   const everyone = summarise(all);
   const workers = summarise(all.filter((m) => m.is_worker));
   const hasWorkers = all.some((m) => m.is_worker);
+
   const copySummary = async () => {
     const text = buildAttendanceSummary({
-      date,
+      date: service?.date,
       present: all.filter((m) => statusOf(m.id) === "present"),
+      service,
     });
     try {
       await navigator.clipboard.writeText(text);
@@ -461,25 +695,37 @@ function ServiceOverview({
   return (
     <>
       <PageHeading
-        title={title}
-        subtitle={date ? format(parseISO(date), "EEEE d MMMM yyyy") : undefined}
+        title={service?.name ?? "Service"}
+        subtitle={service?.date ? format(parseISO(service.date), "EEEE d MMMM yyyy") : undefined}
         action={
           <div className="flex gap-2">
             <Button size="lg" className="h-12" onClick={copySummary}>
               <Copy className="mr-2 h-4 w-4" /> Copy summary
             </Button>
             <Button variant="secondary" size="lg" className="h-12" onClick={onEdit}>
-              Edit
+              Edit attendance
             </Button>
           </div>
         }
       />
-      <h2 className="mb-2 text-sm font-semibold tracking-[0.16em] uppercase">Everyone</h2>
-      <div className="mb-6 grid gap-3 sm:grid-cols-3">
-        <Stat label="Present" value={everyone.present} tone="success" />
-        <Stat label="Absent" value={everyone.absent} tone="destructive" />
-        <Stat label="Attendance" value={`${everyone.pct}%`} tone="primary" />
+
+      <h2 className="mb-2 text-sm font-semibold tracking-[0.16em] uppercase">Overview</h2>
+      <div className="mb-6 grid gap-3 sm:grid-cols-4">
+        <Stat label="Total Present" value={totalPresent} tone="primary" />
+        <Stat label="Members Present" value={everyone.present} tone="success" />
+        <Stat label="Visitors / Guests" value={visitorTotal} tone="primary" />
+        <Stat label="Members Absent" value={everyone.absent} tone="destructive" />
       </div>
+
+      {service?.visitor_notes && (
+        <div className="surface mb-6 p-4 border-l-4 border-primary">
+          <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+            Visitor Notes
+          </div>
+          <div className="mt-1 text-sm font-medium">{service.visitor_notes}</div>
+        </div>
+      )}
+
       {hasWorkers && (
         <>
           <h2 className="mb-2 text-sm font-semibold tracking-[0.16em] uppercase">Workers</h2>
@@ -490,6 +736,7 @@ function ServiceOverview({
           </div>
         </>
       )}
+
       <div className="surface p-5">
         <h2 className="text-lg font-semibold">Absentees</h2>
         {absentees.length === 0 ? (

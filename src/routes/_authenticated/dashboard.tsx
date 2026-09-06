@@ -1,12 +1,28 @@
-import { useMemo, useState } from "react";
+﻿import { useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
-import { CalendarPlus, ChevronRight, Repeat, Sparkles } from "lucide-react";
+import {
+  CalendarPlus,
+  ChevronRight,
+  MoreVertical,
+  Pencil,
+  Repeat,
+  Sparkles,
+  Trash2,
+  Users,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
-import { attendanceQuery, membersQuery, servicesQuery, type ServiceType } from "@/lib/data";
+import {
+  attendanceQuery,
+  getServiceVisitorTotal,
+  membersQuery,
+  servicesQuery,
+  type Service,
+  type ServiceType,
+} from "@/lib/data";
 import { PageHeading } from "@/components/app/AppShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,7 +35,14 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Checkbox } from "@/components/ui/checkbox";
+import { useSession } from "@/hooks/use-session";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   head: () => ({
@@ -40,7 +63,11 @@ function ServicesPage() {
   const { data: services } = useSuspenseQuery(servicesQuery);
   const members = useQuery(membersQuery);
   const attendance = useQuery(attendanceQuery);
+  const { isAdmin } = useSession();
   const [page, setPage] = useState(1);
+  const [editingService, setEditingService] = useState<Service | null>(null);
+  const [deletingService, setDeletingService] = useState<Service | null>(null);
+
   const perPage = 10;
   const pageCount = Math.max(1, Math.ceil(services.length / perPage));
   const current = Math.min(page, pageCount);
@@ -70,13 +97,18 @@ function ServicesPage() {
         <ul className="space-y-3">
           {paged.map((service) => {
             const count = counts.get(service.id);
+            const visitors = getServiceVisitorTotal(service);
+            const totalPresent = (count?.present ?? 0) + visitors;
             const pct = count?.total ? Math.round((count.present / count.total) * 100) : null;
             return (
-              <li key={service.id}>
+              <li
+                key={service.id}
+                className="surface hover:shadow-lift relative flex items-center transition-shadow"
+              >
                 <Link
                   to="/attendance/$serviceId"
                   params={{ serviceId: service.id }}
-                  className="surface hover:shadow-lift flex items-center gap-4 p-4 transition-shadow sm:p-5"
+                  className="flex flex-1 items-center gap-4 p-4 sm:p-5"
                 >
                   <div className="bg-secondary text-secondary-foreground grid h-14 w-14 shrink-0 place-items-center rounded-2xl">
                     <span className="text-[10px] tracking-widest uppercase opacity-70">
@@ -88,7 +120,7 @@ function ServicesPage() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="truncate font-semibold">{service.name}</div>
-                    <div className="text-muted-foreground mt-0.5 flex items-center gap-2 text-xs">
+                    <div className="text-muted-foreground mt-0.5 flex flex-wrap items-center gap-2 text-xs">
                       {service.type === "recurring" ? (
                         <>
                           <Repeat className="h-3 w-3" /> Recurring
@@ -98,6 +130,14 @@ function ServicesPage() {
                       )}
                       <span aria-hidden>·</span>
                       {format(parseISO(service.date), "EEEE d MMMM yyyy")}
+                      {visitors > 0 && (
+                        <>
+                          <span aria-hidden>·</span>
+                          <span className="bg-accent/15 text-accent-foreground flex items-center gap-1 rounded-full px-2 py-0.5 font-medium">
+                            <Users className="h-3 w-3" /> +{visitors} visitors
+                          </span>
+                        </>
+                      )}
                     </div>
                   </div>
                   <div className="text-right">
@@ -108,16 +148,42 @@ function ServicesPage() {
                     ) : (
                       <>
                         <div className="font-display text-primary text-xl font-semibold">
-                          {pct}%
+                          {totalPresent}
                         </div>
                         <div className="text-muted-foreground text-xs">
-                          {count!.present}/{count!.total} present
+                          {count!.present}/{count!.total} members ({pct}%)
                         </div>
                       </>
                     )}
                   </div>
                   <ChevronRight className="text-muted-foreground h-4 w-4 shrink-0" />
                 </Link>
+
+                <div className="pr-3">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-muted-foreground hover:text-foreground h-9 w-9 rounded-full"
+                        aria-label="Service actions"
+                      >
+                        <MoreVertical className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => setEditingService(service)}>
+                        <Pencil className="mr-2 h-4 w-4" /> Edit / Rename
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => setDeletingService(service)}
+                        className="text-destructive focus:text-destructive focus:bg-destructive/10"
+                      >
+                        <Trash2 className="mr-2 h-4 w-4" /> Delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
               </li>
             );
           })}
@@ -149,6 +215,9 @@ function ServicesPage() {
           </Button>
         </div>
       )}
+
+      <EditServiceDialog service={editingService} onClose={() => setEditingService(null)} />
+      <DeleteServiceDialog service={deletingService} onClose={() => setDeletingService(null)} />
     </>
   );
 }
@@ -275,6 +344,167 @@ function NewServiceDialog() {
             Create service
           </Button>
         </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function EditServiceDialog({
+  service,
+  onClose,
+}: {
+  service: Service | null;
+  onClose: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const [name, setName] = useState("");
+  const [type, setType] = useState<ServiceType>("recurring");
+  const [date, setDate] = useState("");
+
+  useMemo(() => {
+    if (service) {
+      setName(service.name);
+      setType(service.type);
+      setDate(service.date);
+    }
+  }, [service]);
+
+  const update = useMutation({
+    mutationFn: async () => {
+      if (!service) return;
+      const { error } = await supabase
+        .from("services")
+        .update({
+          name: name.trim(),
+          type,
+          date,
+        })
+        .eq("id", service.id);
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["services"] });
+      queryClient.invalidateQueries({ queryKey: ["service", service?.id] });
+      toast.success("Service updated");
+      onClose();
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  return (
+    <Dialog open={Boolean(service)} onOpenChange={(next) => !next && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Edit service</DialogTitle>
+          <DialogDescription>Update the name, date, or type of this service.</DialogDescription>
+        </DialogHeader>
+        <form
+          className="space-y-4"
+          onSubmit={(event) => {
+            event.preventDefault();
+            update.mutate();
+          }}
+        >
+          <div className="grid grid-cols-2 gap-2">
+            {(["recurring", "one_off"] as ServiceType[]).map((option) => (
+              <button
+                key={option}
+                type="button"
+                onClick={() => setType(option)}
+                className={`rounded-xl border p-3 text-left text-sm transition-colors ${
+                  type === option
+                    ? "border-primary bg-primary/8 text-primary font-semibold"
+                    : "border-border text-muted-foreground"
+                }`}
+              >
+                {option === "recurring" ? "Recurring" : "One-off"}
+              </button>
+            ))}
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="edit-service-name">Service name</Label>
+            <Input
+              id="edit-service-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+              className="h-12"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="edit-service-date">Date</Label>
+            <Input
+              id="edit-service-date"
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              required
+              className="h-12"
+            />
+          </div>
+          <div className="flex gap-2">
+            <Button type="button" variant="secondary" size="lg" className="h-12 flex-1" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button type="submit" size="lg" className="h-12 flex-1" disabled={update.isPending}>
+              Save changes
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function DeleteServiceDialog({
+  service,
+  onClose,
+}: {
+  service: Service | null;
+  onClose: () => void;
+}) {
+  const queryClient = useQueryClient();
+
+  const remove = useMutation({
+    mutationFn: async () => {
+      if (!service) return;
+      const { error } = await supabase.from("services").delete().eq("id", service.id);
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["services"] });
+      queryClient.invalidateQueries({ queryKey: ["attendance"] });
+      toast.success("Service deleted");
+      onClose();
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  return (
+    <Dialog open={Boolean(service)} onOpenChange={(next) => !next && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Delete service?</DialogTitle>
+          <DialogDescription>
+            Are you sure you want to delete <strong className="text-foreground">{service?.name}</strong>?
+            This will also delete all attendance records associated with this service. This action cannot be undone.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="mt-4 flex gap-2">
+          <Button type="button" variant="secondary" size="lg" className="h-12 flex-1" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            variant="destructive"
+            size="lg"
+            className="h-12 flex-1"
+            disabled={remove.isPending}
+            onClick={() => remove.mutate()}
+          >
+            Delete
+          </Button>
+        </div>
       </DialogContent>
     </Dialog>
   );
