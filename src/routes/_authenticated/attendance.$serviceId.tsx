@@ -14,6 +14,7 @@ import {
   Plus,
   Radio,
   UserCheck,
+  Lock,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -310,7 +311,13 @@ function AttendancePage() {
     mutationFn: async () => {
       const { data: session } = await supabase.auth.getUser();
 
-      // Update visitor counts, taken_by, and updated_by on service
+      const currentSubmissions = service.data?.submission_count ?? (alreadyRecorded ? 1 : 0);
+      if (alreadyRecorded && currentSubmissions >= 6) {
+        throw new Error("Attendance has already been resubmitted the maximum of 5 times.");
+      }
+      const nextSubmissionCount = currentSubmissions + 1;
+
+      // Update visitor counts, taken_by, updated_by, and submission_count on service
       const { error: serviceError } = await supabase
         .from("services")
         .update({
@@ -326,6 +333,7 @@ function AttendancePage() {
           updated_by_name: currentUserName || "Attendance Taker",
           updated_by_id: session.user?.id ?? null,
           updated_at: new Date().toISOString(),
+          submission_count: nextSubmissionCount,
         })
         .eq("id", serviceId);
 
@@ -356,6 +364,8 @@ function AttendancePage() {
           visitors: totalVisitors,
           visitor_notes: visitors.notes.trim() || null,
           is_edit: editing || alreadyRecorded,
+          submission_count: nextSubmissionCount,
+          resubmission_number: Math.max(0, nextSubmissionCount - 1),
         },
       });
 
@@ -868,29 +878,55 @@ function ServiceOverview({
     }
   };
 
+  const rawSubmissions = service?.submission_count ?? 1;
+  const resubmitCount = Math.max(0, rawSubmissions - 1);
+  const maxResubmits = 5;
+  const resubmitsRemaining = Math.max(0, maxResubmits - resubmitCount);
+  const isResubmitLocked = resubmitCount >= maxResubmits;
+
   return (
     <>
       <PageHeading
         title={service?.name ?? "Service"}
         subtitle={service?.date ? format(parseISO(service.date), "EEEE d MMMM yyyy") : undefined}
         action={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button size="lg" className="h-12" onClick={copySummary}>
               <Copy className="mr-2 h-4 w-4" /> Copy summary
             </Button>
-            <Button variant="secondary" size="lg" className="h-12" onClick={onEdit}>
-              Edit attendance
-            </Button>
+            {isResubmitLocked ? (
+              <Button
+                variant="secondary"
+                size="lg"
+                className="h-12 opacity-60 cursor-not-allowed text-muted-foreground"
+                disabled
+                title="Maximum of 5 resubmissions reached"
+              >
+                <Lock className="mr-2 h-4 w-4" /> Resubmit locked (5/5 used)
+              </Button>
+            ) : (
+              <Button variant="secondary" size="lg" className="h-12" onClick={onEdit}>
+                Edit attendance ({resubmitsRemaining}{" "}
+                {resubmitsRemaining === 1 ? "resubmit" : "resubmits"} left)
+              </Button>
+            )}
           </div>
         }
       />
 
-      {service?.taken_by_name && (
-        <div className="mb-4 inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
-          <UserCheck className="h-3.5 w-3.5" />
-          Attendance taken by {service.taken_by_name}
-        </div>
-      )}
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        {service?.taken_by_name && (
+          <div className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
+            <UserCheck className="h-3.5 w-3.5" />
+            Attendance taken by {service.taken_by_name}
+          </div>
+        )}
+        {resubmitCount > 0 && (
+          <div className="inline-flex items-center gap-1.5 rounded-full bg-secondary px-3 py-1 text-xs font-medium text-secondary-foreground">
+            Resubmitted: {resubmitCount}/{maxResubmits} times
+          </div>
+        )}
+      </div>
 
       <h2 className="mb-2 text-sm font-semibold tracking-[0.16em] uppercase">Overview</h2>
       <div className="mb-6 grid gap-3 sm:grid-cols-4">

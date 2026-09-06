@@ -191,6 +191,7 @@ export type Database = {
           taken_by_id: string | null;
           updated_by_name: string | null;
           updated_by_id: string | null;
+          submission_count: number;
         };
         Insert: {
           created_at?: string;
@@ -211,6 +212,7 @@ export type Database = {
           taken_by_id?: string | null;
           updated_by_name?: string | null;
           updated_by_id?: string | null;
+          submission_count?: number;
         };
         Update: {
           created_at?: string;
@@ -231,6 +233,7 @@ export type Database = {
           taken_by_id?: string | null;
           updated_by_name?: string | null;
           updated_by_id?: string | null;
+          submission_count?: number;
         };
         Relationships: [];
       };

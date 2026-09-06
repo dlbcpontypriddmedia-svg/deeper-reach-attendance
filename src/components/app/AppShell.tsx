@@ -1,11 +1,22 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { LogOut, Users, CalendarDays, BarChart3, KeyRound, History } from "lucide-react";
+import {
+  LogOut,
+  Users,
+  CalendarDays,
+  BarChart3,
+  KeyRound,
+  History,
+  Bell,
+  AlertTriangle,
+  X,
+} from "lucide-react";
 import type { ReactNode } from "react";
 
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/hooks/use-session";
 import { useIdleTimeout } from "@/hooks/use-idle-timeout";
+import { useAttendanceReminders } from "@/hooks/use-attendance-reminders";
 import { initials } from "@/lib/data";
 import { Button } from "@/components/ui/button";
 import { BrandLockup } from "./Brand";
@@ -22,6 +33,13 @@ export function AppShell({ children }: { children: ReactNode }) {
   const { name, role, isAdmin } = useSession();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const {
+    isReminderActive,
+    pendingService,
+    permission,
+    requestNotificationPermission,
+    dismissReminder,
+  } = useAttendanceReminders();
 
   // Auto logout after 10 minutes of inactivity
   useIdleTimeout(10 * 60 * 1000);
@@ -79,6 +97,55 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         </nav>
       </header>
+
+      {/* Urgent Sunday Attendance Reminder Banner */}
+      {isReminderActive && pendingService && (
+        <div className="bg-rose-500/15 border-b border-rose-500/30 px-4 py-3 sm:px-6">
+          <div className="mx-auto flex max-w-6xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3">
+              <div className="bg-rose-500 text-white rounded-lg p-1.5 shrink-0 animate-pulse">
+                <AlertTriangle className="h-4 w-4" />
+              </div>
+              <div className="text-xs sm:text-sm font-medium text-rose-950 dark:text-rose-200">
+                <strong className="font-semibold">Sunday Attendance Reminder:</strong> Attendance
+                for <span className="underline font-semibold">{pendingService.name}</span> has not
+                been submitted yet!
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              {permission !== "granted" && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => requestNotificationPermission()}
+                  className="h-8 text-xs bg-background/80 border-rose-300 dark:border-rose-800 hover:bg-background text-foreground"
+                >
+                  <Bell className="mr-1.5 h-3.5 w-3.5 text-rose-600 dark:text-rose-400" />
+                  Enable Browser Push
+                </Button>
+              )}
+              <Link to="/attendance/$serviceId" params={{ serviceId: pendingService.id }}>
+                <Button
+                  size="sm"
+                  className="h-8 text-xs bg-rose-600 hover:bg-rose-700 text-white shadow-sm font-semibold"
+                >
+                  Take Attendance Now →
+                </Button>
+              </Link>
+              <button
+                type="button"
+                onClick={dismissReminder}
+                aria-label="Dismiss banner"
+                className="text-rose-700 dark:text-rose-300 hover:opacity-75 p-1 rounded-md"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 sm:py-8">{children}</main>
     </div>
   );

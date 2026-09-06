@@ -7,6 +7,7 @@ import {
   Clock,
   History,
   KeyRound,
+  Mail,
   Pencil,
   Plus,
   RefreshCw,
@@ -136,7 +137,10 @@ function AuditPage() {
             const formattedDate = format(parseISO(log.created_at), "EEE, d MMM yyyy · h:mm:ss a");
 
             return (
-              <li key={log.id} className="surface overflow-hidden transition-shadow hover:shadow-sm">
+              <li
+                key={log.id}
+                className="surface overflow-hidden transition-shadow hover:shadow-sm"
+              >
                 <div
                   className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5 cursor-pointer select-none"
                   onClick={() => setExpandedId(isExpanded ? null : log.id)}
@@ -216,19 +220,27 @@ function DetailsSummary({ log }: { log: AuditLog }) {
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 mb-2">
         <div className="surface p-2.5 rounded-lg text-center">
           <div className="text-muted-foreground text-[10px] uppercase">Total Present</div>
-          <div className="text-primary text-base font-bold">{String(details.total_present ?? "-")}</div>
+          <div className="text-primary text-base font-bold">
+            {String(details.total_present ?? "-")}
+          </div>
         </div>
         <div className="surface p-2.5 rounded-lg text-center">
           <div className="text-muted-foreground text-[10px] uppercase">Members</div>
-          <div className="text-success text-base font-bold">{String(details.members_present ?? "-")}</div>
+          <div className="text-success text-base font-bold">
+            {String(details.members_present ?? "-")}
+          </div>
         </div>
         <div className="surface p-2.5 rounded-lg text-center">
           <div className="text-muted-foreground text-[10px] uppercase">Visitors</div>
-          <div className="text-accent-foreground text-base font-bold">{String(details.visitors ?? "0")}</div>
+          <div className="text-accent-foreground text-base font-bold">
+            {String(details.visitors ?? "0")}
+          </div>
         </div>
         <div className="surface p-2.5 rounded-lg text-center">
           <div className="text-muted-foreground text-[10px] uppercase">Absentees</div>
-          <div className="text-destructive text-base font-bold">{String(details.members_absent ?? "-")}</div>
+          <div className="text-destructive text-base font-bold">
+            {String(details.members_absent ?? "-")}
+          </div>
         </div>
       </div>
     );
@@ -251,11 +263,40 @@ function DetailsSummary({ log }: { log: AuditLog }) {
     );
   }
 
+  if (log.action === "reminder_sent") {
+    return (
+      <div className="surface p-3 rounded-lg mb-2 space-y-1.5 border-l-4 border-amber-500">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-semibold text-amber-700 dark:text-amber-300 uppercase tracking-wide">
+            Automated Reminder Sent:
+          </span>
+          <span className="text-sm font-semibold text-foreground">
+            {String(details.service_name || log.entity_title || "Sunday Service")}
+          </span>
+        </div>
+        <div className="text-xs text-muted-foreground flex flex-wrap gap-2 items-center">
+          {details.recipients_count !== undefined && (
+            <span>
+              Sent to <strong>{String(details.recipients_count)}</strong> recipient(s)
+            </span>
+          )}
+          {details.service_date && <span>· Service Date: {String(details.service_date)}</span>}
+        </div>
+      </div>
+    );
+  }
+
   return null;
 }
 
 function getActionMeta(action: string) {
   switch (action) {
+    case "reminder_sent":
+      return {
+        label: "Reminder Sent",
+        icon: Mail,
+        badgeClass: "bg-amber-500/15 text-amber-700 dark:text-amber-300",
+      };
     case "service_created":
       return {
         label: "Service Created",

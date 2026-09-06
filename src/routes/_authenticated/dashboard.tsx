@@ -9,6 +9,7 @@ import {
   MoreVertical,
   Pencil,
   Repeat,
+  Search,
   Sparkles,
   Trash2,
   UserCheck,
@@ -62,6 +63,8 @@ export const Route = createFileRoute("/_authenticated/dashboard")({
   component: ServicesPage,
 });
 
+type ServiceFilter = "all" | "taken" | "pending" | "recurring" | "one_off";
+
 function ServicesPage() {
   const { data: services } = useSuspenseQuery(servicesQuery);
   const members = useQuery(membersQuery);
@@ -75,6 +78,8 @@ function ServicesPage() {
   });
   const { isAdmin } = useSession();
   const [page, setPage] = useState(1);
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState<ServiceFilter>("all");
   const [editingService, setEditingService] = useState<Service | null>(null);
   const [deletingService, setDeletingService] = useState<Service | null>(null);
 
@@ -85,11 +90,6 @@ function ServicesPage() {
     }
     return map;
   }, [profiles.data]);
-
-  const perPage = 10;
-  const pageCount = Math.max(1, Math.ceil(services.length / perPage));
-  const current = Math.min(page, pageCount);
-  const paged = services.slice((current - 1) * perPage, current * perPage);
 
   const counts = useMemo(() => {
     const map = new Map<string, { present: number; total: number }>();
@@ -102,14 +102,108 @@ function ServicesPage() {
     return map;
   }, [attendance.data]);
 
+  const filteredServices = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return services.filter((service) => {
+      const count = counts.get(service.id);
+      const isTaken = (count?.total ?? 0) > 0 || Boolean(service.taken_by_name);
+
+      if (filter === "taken" && !isTaken) return false;
+      if (filter === "pending" && isTaken) return false;
+      if (filter === "recurring" && service.type !== "recurring") return false;
+      if (filter === "one_off" && service.type !== "one_off") return false;
+
+      if (!q) return true;
+
+      const fallbackRecord = (attendance.data ?? []).find(
+        (r) => r.service_id === service.id && r.recorded_by,
+      );
+      const fallbackTaker = fallbackRecord?.recorded_by
+        ? profilesById.get(fallbackRecord.recorded_by)
+        : "";
+      const takerName =
+        service.taken_by_name ||
+        (service.taken_by_id ? profilesById.get(service.taken_by_id) : undefined) ||
+        fallbackTaker ||
+        "";
+      const dateFormatted = format(parseISO(service.date), "EEE d MMM yyyy").toLowerCase();
+
+      return (
+        service.name.toLowerCase().includes(q) ||
+        service.date.toLowerCase().includes(q) ||
+        dateFormatted.includes(q) ||
+        takerName.toLowerCase().includes(q)
+      );
+    });
+  }, [services, counts, filter, search, profilesById, attendance.data]);
+
+  const perPage = 10;
+  const pageCount = Math.max(1, Math.ceil(filteredServices.length / perPage));
+  const current = Math.min(page, pageCount);
+  const paged = filteredServices.slice((current - 1) * perPage, current * perPage);
+
   return (
     <>
       <PageHeading title="Services" action={<NewServiceDialog />} />
+
+      {/* Search and Category Filters */}
+      {services.length > 0 && (
+        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="relative flex-1">
+            <Search className="text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
+            <Input
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(1);
+              }}
+              placeholder="Search by service name, date, or taker..."
+              className="h-11 pl-9"
+            />
+          </div>
+
+          <div className="flex flex-wrap gap-1.5 overflow-x-auto">
+            {(
+              [
+                { key: "all", label: "All Services" },
+                { key: "taken", label: "Taken" },
+                { key: "pending", label: "Pending" },
+                { key: "recurring", label: "Recurring" },
+                { key: "one_off", label: "One-off" },
+              ] as const
+            ).map((item) => (
+              <button
+                key={item.key}
+                type="button"
+                onClick={() => {
+                  setFilter(item.key);
+                  setPage(1);
+                }}
+                className={`rounded-xl px-3.5 py-2 text-xs font-semibold transition-colors ${
+                  filter === item.key
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "bg-secondary text-secondary-foreground hover:bg-secondary/80"
+                }`}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {services.length === 0 ? (
         <div className="surface p-10 text-center">
           <Sparkles className="text-primary mx-auto h-6 w-6" />
           <p className="font-display mt-3 text-lg">No services yet</p>
+        </div>
+      ) : filteredServices.length === 0 ? (
+        <div className="surface p-10 text-center">
+          <Sparkles className="text-primary mx-auto h-6 w-6" />
+          <p className="font-display mt-3 text-lg font-semibold">No matching services</p>
+          <p className="text-muted-foreground mt-1 text-sm">
+            Try adjusting your search query or category filter.
+          </p>
         </div>
       ) : (
         <ul className="space-y-3">
