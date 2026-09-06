@@ -12,13 +12,14 @@ import {
   Plus,
   RefreshCw,
   Search,
+  Send,
   Trash2,
   UserCheck,
   UserPlus,
 } from "lucide-react";
 
 import { auditLogsQuery, type AuditLog } from "@/lib/audit";
-import { initials } from "@/lib/data";
+import { CATEGORY_LABELS, initials, normalizeMemberCategory, type MemberCategory } from "@/lib/data";
 import { PageHeading } from "@/components/app/AppShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -194,13 +195,10 @@ function AuditPage() {
                 {/* Expandable Details Payload */}
                 {isExpanded && (
                   <div className="border-border/60 bg-secondary/30 border-t p-4 sm:p-5 text-xs">
-                    <div className="font-semibold text-muted-foreground uppercase tracking-wider text-[10px] mb-2">
+                    <div className="font-semibold text-muted-foreground uppercase tracking-wider text-[10px] mb-2.5">
                       Event Details & Snapshot
                     </div>
                     <DetailsSummary log={log} />
-                    <pre className="mt-3 overflow-x-auto rounded-lg bg-background p-3 text-[11px] text-muted-foreground">
-                      {JSON.stringify(log.details, null, 2)}
-                    </pre>
                   </div>
                 )}
               </li>
@@ -212,35 +210,219 @@ function AuditPage() {
   );
 }
 
+function formatCategory(category?: unknown): string {
+  if (typeof category === "string" && category in CATEGORY_LABELS) {
+    return CATEGORY_LABELS[normalizeMemberCategory(category as MemberCategory)] || category;
+  }
+  return String(category ?? "-");
+}
+
 function DetailsSummary({ log }: { log: AuditLog }) {
   const details = (log.details ?? {}) as Record<string, unknown>;
 
   if (log.action === "attendance_taken" || log.action === "attendance_updated") {
+    const isResubmission =
+      log.action === "attendance_updated" ||
+      (typeof details.submission_count === "number" && details.submission_count > 1);
     return (
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 mb-2">
-        <div className="surface p-2.5 rounded-lg text-center">
-          <div className="text-muted-foreground text-[10px] uppercase">Total Present</div>
-          <div className="text-primary text-base font-bold">
-            {String(details.total_present ?? "-")}
+      <div className="space-y-2">
+        {isResubmission && (
+          <div className="inline-flex items-center gap-1.5 rounded-md bg-purple-500/10 px-2.5 py-1 text-xs font-semibold text-purple-700 dark:text-purple-300">
+            Resubmission #{String(details.submission_count ?? 1)}
+          </div>
+        )}
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <div className="surface p-2.5 rounded-lg text-center">
+            <div className="text-muted-foreground text-[10px] uppercase font-medium">Total Present</div>
+            <div className="text-primary text-base font-bold">{String(details.total_present ?? "-")}</div>
+          </div>
+          <div className="surface p-2.5 rounded-lg text-center">
+            <div className="text-muted-foreground text-[10px] uppercase font-medium">Members</div>
+            <div className="text-success text-base font-bold">{String(details.members_present ?? "-")}</div>
+          </div>
+          <div className="surface p-2.5 rounded-lg text-center">
+            <div className="text-muted-foreground text-[10px] uppercase font-medium">Visitors</div>
+            <div className="text-accent-foreground text-base font-bold">{String(details.visitors ?? "0")}</div>
+          </div>
+          <div className="surface p-2.5 rounded-lg text-center">
+            <div className="text-muted-foreground text-[10px] uppercase font-medium">Absentees</div>
+            <div className="text-destructive text-base font-bold">{String(details.members_absent ?? "-")}</div>
           </div>
         </div>
-        <div className="surface p-2.5 rounded-lg text-center">
-          <div className="text-muted-foreground text-[10px] uppercase">Members</div>
-          <div className="text-success text-base font-bold">
-            {String(details.members_present ?? "-")}
+      </div>
+    );
+  }
+
+  if (log.action === "reminder_sent") {
+    const recipients = Array.isArray(details.recipients) ? (details.recipients as string[]) : [];
+    const method =
+      details.send_method === "gmail_smtp"
+        ? "Gmail SMTP (Church Mail)"
+        : details.send_method === "resend"
+          ? "Resend API"
+          : String(details.send_method || "Email");
+
+    return (
+      <div className="surface p-3.5 rounded-xl border-l-4 border-amber-500 space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold text-amber-700 dark:text-amber-300 uppercase tracking-wide">
+              Automated Reminder:
+            </span>
+            <span className="text-sm font-semibold text-foreground">
+              {String(details.service_name || log.entity_title || "Sunday Service")}
+            </span>
           </div>
+          <span className="rounded-full bg-amber-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-amber-700 dark:text-amber-300">
+            {method}
+          </span>
         </div>
-        <div className="surface p-2.5 rounded-lg text-center">
-          <div className="text-muted-foreground text-[10px] uppercase">Visitors</div>
-          <div className="text-accent-foreground text-base font-bold">
-            {String(details.visitors ?? "0")}
-          </div>
+
+        <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+          {details.service_date && (
+            <span>
+              Service Date: <strong className="text-foreground">{String(details.service_date)}</strong>
+            </span>
+          )}
+          {details.recipients_count !== undefined && (
+            <span>
+              Total Recipients: <strong className="text-foreground">{String(details.recipients_count)}</strong>
+            </span>
+          )}
         </div>
-        <div className="surface p-2.5 rounded-lg text-center">
-          <div className="text-muted-foreground text-[10px] uppercase">Absentees</div>
-          <div className="text-destructive text-base font-bold">
-            {String(details.members_absent ?? "-")}
+
+        {recipients.length > 0 && (
+          <div className="space-y-1.5 pt-1 border-t border-border/50">
+            <div className="text-[11px] font-medium text-muted-foreground">Delivered to:</div>
+            <div className="flex flex-wrap gap-1.5">
+              {recipients.map((email, idx) => (
+                <span
+                  key={idx}
+                  className="inline-flex items-center rounded-lg bg-secondary px-2.5 py-1 text-xs font-medium text-foreground"
+                >
+                  {email}
+                </span>
+              ))}
+            </div>
           </div>
+        )}
+      </div>
+    );
+  }
+
+  if (log.action === "member_created") {
+    return (
+      <div className="surface p-3.5 rounded-xl border-l-4 border-emerald-500 space-y-1.5">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-bold text-emerald-700 dark:text-emerald-300 uppercase tracking-wide">
+            Member Added:
+          </span>
+          <strong className="text-foreground text-sm font-semibold">
+            {String(details.name || log.entity_title || "Unknown")}
+          </strong>
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+          {details.category && (
+            <span className="rounded bg-secondary px-2 py-0.5 font-medium text-foreground">
+              {formatCategory(details.category)}
+            </span>
+          )}
+          {details.gender && (
+            <span className="rounded bg-secondary px-2 py-0.5 capitalize font-medium text-foreground">
+              {String(details.gender)}
+            </span>
+          )}
+          {details.is_worker && (
+            <span className="rounded bg-primary/10 text-primary px-2 py-0.5 font-semibold text-[11px]">
+              Worker
+            </span>
+          )}
+          {details.contact && (
+            <span className="text-muted-foreground text-xs">
+              · Contact: {String(details.contact)}
+            </span>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  if (log.action === "member_deleted") {
+    return (
+      <div className="surface p-3.5 rounded-xl border-l-4 border-rose-500 space-y-1.5">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-bold text-rose-700 dark:text-rose-300 uppercase tracking-wide">
+            Member Removed:
+          </span>
+          <strong className="text-foreground text-sm font-semibold">
+            {String(details.name || log.entity_title || "Unknown")}
+          </strong>
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+          {details.category && (
+            <span className="rounded bg-secondary px-2 py-0.5 font-medium text-foreground">
+              {formatCategory(details.category)}
+            </span>
+          )}
+          {details.gender && (
+            <span className="rounded bg-secondary px-2 py-0.5 capitalize font-medium text-foreground">
+              {String(details.gender)}
+            </span>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  if (log.action === "member_updated" && (details.old || details.new)) {
+    const oldD = (details.old ?? {}) as Record<string, unknown>;
+    const newD = (details.new ?? {}) as Record<string, unknown>;
+    return (
+      <div className="surface p-3.5 rounded-xl border-l-4 border-sky-500 space-y-2">
+        <div className="text-xs font-bold text-sky-700 dark:text-sky-300 uppercase tracking-wide">
+          Member Changes: <strong className="text-foreground font-semibold lowercase tracking-normal">{String(newD.name || oldD.name || log.entity_title)}</strong>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+          {oldD.name !== newD.name && (
+            <div>
+              <span className="text-muted-foreground">Name:</span> {String(oldD.name)} → <strong className="text-foreground">{String(newD.name)}</strong>
+            </div>
+          )}
+          {oldD.category !== newD.category && (
+            <div>
+              <span className="text-muted-foreground">Category:</span> {formatCategory(oldD.category)} → <strong className="text-foreground">{formatCategory(newD.category)}</strong>
+            </div>
+          )}
+          {oldD.gender !== newD.gender && (
+            <div>
+              <span className="text-muted-foreground">Gender:</span> {String(oldD.gender)} → <strong className="text-foreground">{String(newD.gender)}</strong>
+            </div>
+          )}
+          {oldD.is_worker !== newD.is_worker && (
+            <div>
+              <span className="text-muted-foreground">Worker Status:</span> {oldD.is_worker ? "Worker" : "Member"} → <strong className="text-foreground">{newD.is_worker ? "Worker" : "Member"}</strong>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  if (log.action === "service_created") {
+    return (
+      <div className="surface p-3.5 rounded-xl border-l-4 border-emerald-500 space-y-1.5">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-bold text-emerald-700 dark:text-emerald-300 uppercase tracking-wide">
+            Service Created:
+          </span>
+          <strong className="text-foreground text-sm font-semibold">{String(details.name || log.entity_title)}</strong>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+          {details.date && <span>Date: <strong className="text-foreground">{String(details.date)}</strong></span>}
+          {details.type && <span className="capitalize">· Type: <strong className="text-foreground">{String(details.type)}</strong></span>}
+          {typeof details.count === "number" && details.count > 1 && (
+            <span>· ({details.count} recurring services generated)</span>
+          )}
         </div>
       </div>
     );
@@ -250,43 +432,78 @@ function DetailsSummary({ log }: { log: AuditLog }) {
     const oldD = details.old as Record<string, unknown>;
     const newD = details.new as Record<string, unknown>;
     return (
-      <div className="surface p-3 rounded-lg mb-2 space-y-1">
-        <div>
-          <span className="text-muted-foreground">Name:</span> {String(oldD.name)} →{" "}
-          <strong className="text-foreground">{String(newD.name)}</strong>
+      <div className="surface p-3.5 rounded-xl border-l-4 border-sky-500 space-y-1">
+        <div className="text-xs font-bold text-sky-700 dark:text-sky-300 uppercase tracking-wide mb-1">
+          Service Updated
         </div>
-        <div>
-          <span className="text-muted-foreground">Date:</span> {String(oldD.date)} →{" "}
-          <strong className="text-foreground">{String(newD.date)}</strong>
-        </div>
+        {oldD.name !== newD.name && (
+          <div>
+            <span className="text-muted-foreground">Name:</span> {String(oldD.name)} →{" "}
+            <strong className="text-foreground">{String(newD.name)}</strong>
+          </div>
+        )}
+        {oldD.date !== newD.date && (
+          <div>
+            <span className="text-muted-foreground">Date:</span> {String(oldD.date)} →{" "}
+            <strong className="text-foreground">{String(newD.date)}</strong>
+          </div>
+        )}
       </div>
     );
   }
 
-  if (log.action === "reminder_sent") {
+  if (log.action === "service_deleted") {
     return (
-      <div className="surface p-3 rounded-lg mb-2 space-y-1.5 border-l-4 border-amber-500">
+      <div className="surface p-3.5 rounded-xl border-l-4 border-rose-500 space-y-1.5">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs font-semibold text-amber-700 dark:text-amber-300 uppercase tracking-wide">
-            Automated Reminder Sent:
+          <span className="text-xs font-bold text-rose-700 dark:text-rose-300 uppercase tracking-wide">
+            Service Deleted:
           </span>
-          <span className="text-sm font-semibold text-foreground">
-            {String(details.service_name || log.entity_title || "Sunday Service")}
-          </span>
+          <strong className="text-foreground text-sm font-semibold">{String(details.name || log.entity_title)}</strong>
         </div>
-        <div className="text-xs text-muted-foreground flex flex-wrap gap-2 items-center">
-          {details.recipients_count !== undefined && (
-            <span>
-              Sent to <strong>{String(details.recipients_count)}</strong> recipient(s)
-            </span>
-          )}
-          {details.service_date && <span>· Service Date: {String(details.service_date)}</span>}
+        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+          {details.date && <span>Date: {String(details.date)}</span>}
+          {details.type && <span className="capitalize">· Type: {String(details.type)}</span>}
+          {details.visitors !== undefined && <span>· Visitors snapshot: {String(details.visitors)}</span>}
         </div>
       </div>
     );
   }
 
-  return null;
+  if (log.action === "role_updated") {
+    return (
+      <div className="surface p-3.5 rounded-xl border-l-4 border-amber-500 space-y-1.5">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-bold text-amber-700 dark:text-amber-300 uppercase tracking-wide">
+            Role Assignment:
+          </span>
+          <span className="text-sm font-semibold text-foreground">{log.entity_title || "Account"}</span>
+        </div>
+        <div className="text-xs text-muted-foreground">
+          Assigned Role: <span className="capitalize font-semibold text-foreground">{String(details.role || "-")}</span>
+          {details.action === "account_created" && <span className="ml-2 text-[11px]">(New account created)</span>}
+        </div>
+      </div>
+    );
+  }
+
+  // Clean fallback for any other properties without showing raw JSON
+  const entries = Object.entries(details).filter(
+    ([key]) => !["message_id", "resend_id"].includes(key),
+  );
+
+  if (entries.length === 0) return null;
+
+  return (
+    <div className="surface p-3 rounded-lg grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+      {entries.map(([key, val]) => (
+        <div key={key}>
+          <span className="text-muted-foreground capitalize">{key.replace(/_/g, " ")}:</span>{" "}
+          <strong className="text-foreground">{typeof val === "object" ? JSON.stringify(val) : String(val)}</strong>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 function getActionMeta(action: string) {
