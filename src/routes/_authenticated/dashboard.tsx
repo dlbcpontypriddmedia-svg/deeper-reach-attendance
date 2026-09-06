@@ -1,15 +1,17 @@
-﻿import { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
 import {
   CalendarPlus,
   ChevronRight,
+  Lock,
   MoreVertical,
   Pencil,
   Repeat,
   Sparkles,
   Trash2,
+  UserCheck,
   Users,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -63,10 +65,25 @@ function ServicesPage() {
   const { data: services } = useSuspenseQuery(servicesQuery);
   const members = useQuery(membersQuery);
   const attendance = useQuery(attendanceQuery);
+  const profiles = useQuery({
+    queryKey: ["profiles"],
+    queryFn: async () => {
+      const { data } = await supabase.from("profiles").select("id, name, username");
+      return data ?? [];
+    },
+  });
   const { isAdmin } = useSession();
   const [page, setPage] = useState(1);
   const [editingService, setEditingService] = useState<Service | null>(null);
   const [deletingService, setDeletingService] = useState<Service | null>(null);
+
+  const profilesById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const p of profiles.data ?? []) {
+      map.set(p.id, p.name || p.username);
+    }
+    return map;
+  }, [profiles.data]);
 
   const perPage = 10;
   const pageCount = Math.max(1, Math.ceil(services.length / perPage));
@@ -100,6 +117,20 @@ function ServicesPage() {
             const visitors = getServiceVisitorTotal(service);
             const totalPresent = (count?.present ?? 0) + visitors;
             const pct = count?.total ? Math.round((count.present / count.total) * 100) : null;
+            const isAttendanceTaken =
+              (count?.total ?? 0) > 0 || pct !== null || Boolean(service.taken_by_name);
+
+            const fallbackRecord = (attendance.data ?? []).find(
+              (r) => r.service_id === service.id && r.recorded_by,
+            );
+            const fallbackTaker = fallbackRecord?.recorded_by
+              ? profilesById.get(fallbackRecord.recorded_by)
+              : undefined;
+            const takerName =
+              service.taken_by_name ||
+              (service.taken_by_id ? profilesById.get(service.taken_by_id) : undefined) ||
+              fallbackTaker;
+
             return (
               <li
                 key={service.id}
@@ -122,7 +153,9 @@ function ServicesPage() {
 
                   {/* Title and Metadata */}
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-semibold sm:text-base">{service.name}</div>
+                    <div className="truncate text-sm font-semibold sm:text-base">
+                      {service.name}
+                    </div>
                     <div className="text-muted-foreground mt-1 flex flex-wrap items-center gap-1.5 text-xs sm:mt-0.5 sm:gap-2">
                       <span className="inline-flex items-center gap-1">
                         {service.type === "recurring" ? (
@@ -140,6 +173,14 @@ function ServicesPage() {
                           <span aria-hidden>·</span>
                           <span className="bg-accent/15 text-accent-foreground inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-medium text-[11px]">
                             <Users className="h-3 w-3" /> +{visitors} visitors
+                          </span>
+                        </>
+                      )}
+                      {takerName && (
+                        <>
+                          <span aria-hidden>·</span>
+                          <span className="bg-primary/10 text-primary inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-medium text-[11px]">
+                            <UserCheck className="h-3 w-3 shrink-0" /> Taken by {takerName}
                           </span>
                         </>
                       )}
@@ -183,12 +224,22 @@ function ServicesPage() {
                       <DropdownMenuItem onClick={() => setEditingService(service)}>
                         <Pencil className="mr-2 h-4 w-4" /> Edit / Rename
                       </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => setDeletingService(service)}
-                        className="text-destructive focus:text-destructive focus:bg-destructive/10"
-                      >
-                        <Trash2 className="mr-2 h-4 w-4" /> Delete
-                      </DropdownMenuItem>
+                      {isAttendanceTaken ? (
+                        <DropdownMenuItem
+                          disabled
+                          className="opacity-60 cursor-not-allowed text-muted-foreground"
+                          title="Delete is locked because attendance has been taken for this service"
+                        >
+                          <Lock className="mr-2 h-4 w-4" /> Delete (Locked)
+                        </DropdownMenuItem>
+                      ) : (
+                        <DropdownMenuItem
+                          onClick={() => setDeletingService(service)}
+                          className="text-destructive focus:text-destructive focus:bg-destructive/10"
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" /> Delete
+                        </DropdownMenuItem>
+                      )}
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>
@@ -357,13 +408,7 @@ function NewServiceDialog() {
   );
 }
 
-function EditServiceDialog({
-  service,
-  onClose,
-}: {
-  service: Service | null;
-  onClose: () => void;
-}) {
+function EditServiceDialog({ service, onClose }: { service: Service | null; onClose: () => void }) {
   const queryClient = useQueryClient();
   const [name, setName] = useState("");
   const [type, setType] = useState<ServiceType>("recurring");
@@ -451,7 +496,13 @@ function EditServiceDialog({
             />
           </div>
           <div className="flex gap-2">
-            <Button type="button" variant="secondary" size="lg" className="h-12 flex-1" onClick={onClose}>
+            <Button
+              type="button"
+              variant="secondary"
+              size="lg"
+              className="h-12 flex-1"
+              onClick={onClose}
+            >
               Cancel
             </Button>
             <Button type="submit" size="lg" className="h-12 flex-1" disabled={update.isPending}>
@@ -476,6 +527,15 @@ function DeleteServiceDialog({
   const remove = useMutation({
     mutationFn: async () => {
       if (!service) return;
+      const { count, error: countErr } = await supabase
+        .from("attendance_records")
+        .select("*", { count: "exact", head: true })
+        .eq("service_id", service.id);
+
+      if (!countErr && (count ?? 0) > 0) {
+        throw new Error("Cannot delete a service after attendance has been recorded.");
+      }
+
       const { error } = await supabase.from("services").delete().eq("id", service.id);
       if (error) throw new Error(error.message);
     },
@@ -494,12 +554,19 @@ function DeleteServiceDialog({
         <DialogHeader>
           <DialogTitle>Delete service?</DialogTitle>
           <DialogDescription>
-            Are you sure you want to delete <strong className="text-foreground">{service?.name}</strong>?
-            This will also delete all attendance records associated with this service. This action cannot be undone.
+            Are you sure you want to delete{" "}
+            <strong className="text-foreground">{service?.name}</strong>? This will also delete all
+            attendance records associated with this service. This action cannot be undone.
           </DialogDescription>
         </DialogHeader>
         <div className="mt-4 flex gap-2">
-          <Button type="button" variant="secondary" size="lg" className="h-12 flex-1" onClick={onClose}>
+          <Button
+            type="button"
+            variant="secondary"
+            size="lg"
+            className="h-12 flex-1"
+            onClick={onClose}
+          >
             Cancel
           </Button>
           <Button

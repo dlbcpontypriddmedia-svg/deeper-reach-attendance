@@ -1,11 +1,24 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
-import { Check, ChevronDown, X, ArrowLeft, Search, Copy, Users, Minus, Plus } from "lucide-react";
+import {
+  Check,
+  ChevronDown,
+  X,
+  ArrowLeft,
+  Search,
+  Copy,
+  Users,
+  Minus,
+  Plus,
+  Radio,
+  UserCheck,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
+import { useSession } from "@/hooks/use-session";
 import {
   CATEGORY_LABELS,
   CATEGORY_ORDER,
@@ -42,13 +55,24 @@ export const Route = createFileRoute("/_authenticated/attendance/$serviceId")({
 
 type Status = "present" | "absent";
 
+interface ActiveTaker {
+  userId: string;
+  name: string;
+  role: string;
+  onlineAt: string;
+}
+
 function AttendancePage() {
   const { serviceId } = Route.useParams();
+  const { name: currentUserName, userId: currentUserId, role: currentUserRole } = useSession();
   const queryClient = useQueryClient();
   const [statuses, setStatuses] = useState<Record<string, Status>>({});
   const [search, setSearch] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [editing, setEditing] = useState(false);
+
+  // Active peer takers state
+  const [activeTakers, setActiveTakers] = useState<ActiveTaker[]>([]);
 
   // Visitors / Guests state
   const [visitors, setVisitors] = useState({
@@ -70,6 +94,89 @@ function AttendancePage() {
     queryKey: ["attendance", serviceId],
     queryFn: () => fetchAttendance(serviceId),
   });
+
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+
+  // Set up Realtime Presence and Broadcast channel
+  useEffect(() => {
+    if (!serviceId || !currentUserId) return;
+
+    const channelName = `attendance-room-${serviceId}`;
+    const channel = supabase.channel(channelName, {
+      config: {
+        presence: {
+          key: currentUserId,
+        },
+      },
+    });
+
+    channelRef.current = channel;
+
+    // 1. Presence Sync (Track who is actively viewing / taking attendance)
+    channel.on("presence", { event: "sync" }, () => {
+      const state = channel.presenceState<{
+        userId: string;
+        name: string;
+        role: string;
+        onlineAt: string;
+      }>();
+      const takers: ActiveTaker[] = [];
+      for (const key of Object.keys(state)) {
+        const presences = state[key] ?? [];
+        for (const p of presences) {
+          if (p.userId && p.userId !== currentUserId) {
+            takers.push(p);
+          }
+        }
+      }
+      setActiveTakers(takers);
+    });
+
+    // 2. Real-time broadcast for member attendance status updates
+    channel.on("broadcast", { event: "status-change" }, ({ payload }) => {
+      if (payload && payload.userId !== currentUserId && payload.statuses) {
+        setStatuses((prev) => ({
+          ...prev,
+          ...payload.statuses,
+        }));
+      }
+    });
+
+    // 3. Real-time broadcast for visitor count changes
+    channel.on("broadcast", { event: "visitors-change" }, ({ payload }) => {
+      if (payload && payload.userId !== currentUserId && payload.visitors) {
+        setVisitors(payload.visitors);
+      }
+    });
+
+    // 4. Real-time broadcast when attendance is submitted by another taker
+    channel.on("broadcast", { event: "submitted" }, ({ payload }) => {
+      if (payload && payload.userId !== currentUserId) {
+        toast.info(`${payload.takerName || "Another taker"} submitted attendance`);
+        queryClient.invalidateQueries({ queryKey: ["attendance", serviceId] });
+        queryClient.invalidateQueries({ queryKey: ["service", serviceId] });
+        queryClient.invalidateQueries({ queryKey: ["services"] });
+        setSubmitted(true);
+      }
+    });
+
+    channel.subscribe(async (status) => {
+      if (status === "SUBSCRIBED") {
+        await channel.track({
+          userId: currentUserId,
+          name: currentUserName || "Member",
+          role: currentUserRole || "attendance_taker",
+          onlineAt: new Date().toISOString(),
+        });
+      }
+    });
+
+    return () => {
+      void channel.untrack();
+      void supabase.removeChannel(channel);
+      channelRef.current = null;
+    };
+  }, [serviceId, currentUserId, currentUserName, currentUserRole, queryClient]);
 
   // Sync visitor state when service is loaded
   useEffect(() => {
@@ -164,12 +271,39 @@ function AttendancePage() {
   const totalMembers = allMembers.length;
   const pct = totalMembers ? Math.round((memberPresentCount / totalMembers) * 100) : 0;
 
-  const setMany = (ids: string[], status: Status) =>
-    setStatuses((prev) => {
-      const next = { ...prev };
-      for (const id of ids) next[id] = status;
-      return next;
-    });
+  const setMany = (ids: string[], status: Status) => {
+    const updates: Record<string, Status> = {};
+    for (const id of ids) updates[id] = status;
+
+    setStatuses((prev) => ({ ...prev, ...updates }));
+
+    if (channelRef.current) {
+      void channelRef.current.send({
+        type: "broadcast",
+        event: "status-change",
+        payload: {
+          userId: currentUserId,
+          statuses: updates,
+        },
+      });
+    }
+  };
+
+  const updateVisitors = (field: keyof typeof visitors, val: number | string) => {
+    const nextVisitors = { ...visitors, [field]: val };
+    setVisitors(nextVisitors);
+
+    if (channelRef.current) {
+      void channelRef.current.send({
+        type: "broadcast",
+        event: "visitors-change",
+        payload: {
+          userId: currentUserId,
+          visitors: nextVisitors,
+        },
+      });
+    }
+  };
 
   const submit = useMutation({
     mutationFn: async () => {
@@ -186,6 +320,8 @@ function AttendancePage() {
           visitor_child_male: visitors.child_male,
           visitor_child_female: visitors.child_female,
           visitor_notes: visitors.notes.trim() || null,
+          taken_by_name: currentUserName || "Attendance Taker",
+          taken_by_id: session.user?.id ?? null,
         })
         .eq("id", serviceId);
 
@@ -202,6 +338,18 @@ function AttendancePage() {
           .from("attendance_records")
           .upsert(rows, { onConflict: "service_id,member_id" });
         if (error) throw new Error(error.message);
+      }
+
+      // Broadcast submitted event to other users on the page
+      if (channelRef.current) {
+        void channelRef.current.send({
+          type: "broadcast",
+          event: "submitted",
+          payload: {
+            userId: currentUserId,
+            takerName: currentUserName,
+          },
+        });
       }
     },
     onSuccess: () => {
@@ -254,6 +402,18 @@ function AttendancePage() {
         }
       />
 
+      {/* Real-time Peer Presence Banner */}
+      {activeTakers.length > 0 && (
+        <div className="surface mb-4 flex items-center gap-3 border-l-4 border-amber-500 bg-amber-500/10 p-3.5 text-amber-950 dark:text-amber-200">
+          <Radio className="h-5 w-5 shrink-0 text-amber-600 animate-pulse" />
+          <div className="min-w-0 flex-1 text-xs sm:text-sm">
+            <span className="font-semibold">Live Peer Active:</span>{" "}
+            {activeTakers.map((t) => t.name).join(", ")} {activeTakers.length === 1 ? "is" : "are"}{" "}
+            currently on this sheet. Any marks you make synchronize in real-time.
+          </div>
+        </div>
+      )}
+
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <div className="relative min-w-[12rem] flex-1">
           <Search className="text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
@@ -293,10 +453,7 @@ function AttendancePage() {
       </div>
 
       {/* Visitor / Guest Count Section for Special / Combined Sundays */}
-      <VisitorSection
-        visitors={visitors}
-        onChange={(field, val) => setVisitors((prev) => ({ ...prev, [field]: val }))}
-      />
+      <VisitorSection visitors={visitors} onChange={updateVisitors} />
 
       <ul className="space-y-3 pb-32">
         {CATEGORY_ORDER.map((category) => {
@@ -708,6 +865,13 @@ function ServiceOverview({
           </div>
         }
       />
+
+      {service?.taken_by_name && (
+        <div className="mb-4 inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
+          <UserCheck className="h-3.5 w-3.5" />
+          Attendance taken by {service.taken_by_name}
+        </div>
+      )}
 
       <h2 className="mb-2 text-sm font-semibold tracking-[0.16em] uppercase">Overview</h2>
       <div className="mb-6 grid gap-3 sm:grid-cols-4">

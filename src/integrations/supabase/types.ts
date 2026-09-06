@@ -140,6 +140,8 @@ export type Database = {
           visitor_child_male: number;
           visitor_child_female: number;
           visitor_notes: string | null;
+          taken_by_name: string | null;
+          taken_by_id: string | null;
         };
         Insert: {
           created_at?: string;
@@ -156,6 +158,8 @@ export type Database = {
           visitor_child_male?: number;
           visitor_child_female?: number;
           visitor_notes?: string | null;
+          taken_by_name?: string | null;
+          taken_by_id?: string | null;
         };
         Update: {
           created_at?: string;
@@ -172,6 +176,8 @@ export type Database = {
           visitor_child_male?: number;
           visitor_child_female?: number;
           visitor_notes?: string | null;
+          taken_by_name?: string | null;
+          taken_by_id?: string | null;
         };
         Relationships: [];
       };
