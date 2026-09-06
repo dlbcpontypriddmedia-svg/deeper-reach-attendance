@@ -1,7 +1,7 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { KeyRound, Mail, UserCog, UserPlus } from "lucide-react";
+import { KeyRound, Mail, ShieldCheck, UserCheck, UserCog, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 
 import { useSession } from "@/hooks/use-session";
@@ -84,46 +84,100 @@ function AccountsPage() {
       />
 
       <ul className="space-y-3">
-        {(accounts.data ?? []).map((account) => (
-          <li key={account.id} className="surface flex flex-wrap items-center gap-3 p-4">
-            <div className="bg-primary/10 text-primary grid h-10 w-10 shrink-0 place-items-center rounded-full">
-              <UserCog className="h-4 w-4" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="truncate font-semibold">{account.name}</div>
-              <div className="text-muted-foreground text-xs">
-                {account.email} · {account.role === "admin" ? "Admin" : "Attendance taker"}
+        {(accounts.data ?? []).map((account) => {
+          const isCurrentUser = account.id === userId;
+          return (
+            <li
+              key={account.id}
+              className="surface flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5"
+            >
+              {/* Account Info */}
+              <div className="flex min-w-0 items-center gap-3.5">
+                <div className="bg-primary/10 text-primary grid h-11 w-11 shrink-0 place-items-center rounded-2xl sm:h-12 sm:w-12">
+                  <UserCog className="h-5 w-5" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="truncate text-base font-semibold">{account.name}</span>
+                    {isCurrentUser && (
+                      <span className="bg-primary/10 text-primary rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase">
+                        You
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-muted-foreground mt-0.5 truncate text-xs">
+                    {account.email}
+                  </div>
+                  <div className="mt-1 flex items-center gap-1.5 sm:hidden">
+                    <span
+                      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                        account.role === "admin"
+                          ? "bg-primary/15 text-primary"
+                          : "bg-secondary text-secondary-foreground"
+                      }`}
+                    >
+                      {account.role === "admin" ? (
+                        <>
+                          <ShieldCheck className="h-3 w-3" /> Admin
+                        </>
+                      ) : (
+                        <>
+                          <UserCheck className="h-3 w-3" /> Attendance taker
+                        </>
+                      )}
+                    </span>
+                  </div>
+                </div>
               </div>
-            </div>
-            <Button
-              variant={account.role === "admin" ? "default" : "secondary"}
-              size="sm"
-              className="h-10"
-              disabled={account.id === userId || setRole.isPending}
-              onClick={() => setRole.mutate({ userId: account.id, role: "admin" })}
-            >
-              <KeyRound className="mr-1.5 h-3.5 w-3.5" /> Admin
-            </Button>
-            <Button
-              variant={account.role === "attendance_taker" ? "default" : "secondary"}
-              size="sm"
-              className="h-10"
-              disabled={account.id === userId || setRole.isPending}
-              onClick={() => setRole.mutate({ userId: account.id, role: "attendance_taker" })}
-            >
-              Attendance taker
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-10"
-              disabled={reset.isPending}
-              onClick={() => reset.mutate(account.email)}
-            >
-              <Mail className="mr-1.5 h-3.5 w-3.5" /> Reset password
-            </Button>
-          </li>
-        ))}
+
+              {/* Action Buttons */}
+              <div className="border-border/60 flex flex-wrap items-center gap-2 border-t pt-3 sm:border-t-0 sm:pt-0">
+                {/* Role Switchers */}
+                <div className="bg-secondary/70 grid flex-1 grid-cols-2 gap-1 rounded-xl p-1 sm:flex sm:flex-none">
+                  <Button
+                    variant={account.role === "admin" ? "default" : "ghost"}
+                    size="sm"
+                    className={`h-9 px-3 text-xs ${
+                      account.role === "admin"
+                        ? "shadow-sm"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                    disabled={isCurrentUser || setRole.isPending}
+                    onClick={() => setRole.mutate({ userId: account.id, role: "admin" })}
+                  >
+                    <KeyRound className="mr-1.5 h-3.5 w-3.5" /> Admin
+                  </Button>
+                  <Button
+                    variant={account.role === "attendance_taker" ? "default" : "ghost"}
+                    size="sm"
+                    className={`h-9 px-3 text-xs ${
+                      account.role === "attendance_taker"
+                        ? "shadow-sm"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                    disabled={isCurrentUser || setRole.isPending}
+                    onClick={() =>
+                      setRole.mutate({ userId: account.id, role: "attendance_taker" })
+                    }
+                  >
+                    <UserCheck className="mr-1.5 h-3.5 w-3.5" /> Taker
+                  </Button>
+                </div>
+
+                {/* Password Reset */}
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="h-9 w-full text-xs sm:w-auto"
+                  disabled={reset.isPending}
+                  onClick={() => reset.mutate(account.email)}
+                >
+                  <Mail className="mr-1.5 h-3.5 w-3.5" /> Reset password
+                </Button>
+              </div>
+            </li>
+          );
+        })}
         {accounts.data?.length === 0 && (
           <li className="surface text-muted-foreground p-8 text-center text-sm">
             No accounts yet.
@@ -157,11 +211,11 @@ function CreateAccountDialog({ onCreated }: { onCreated: () => void }) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button size="lg" className="h-12">
+        <Button size="lg" className="h-11 sm:h-12">
           <UserPlus className="mr-2 h-4 w-4" /> New account
         </Button>
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>New account</DialogTitle>
         </DialogHeader>
