@@ -1,7 +1,6 @@
 -- Enable extensions for scheduling and HTTP requests if available
 CREATE EXTENSION IF NOT EXISTS pg_net;
 CREATE EXTENSION IF NOT EXISTS pg_cron;
-
 -- 1. Sunday Attendance Summary
 -- Invokes edge function which dynamically loads the pastor email and configured schedule from app_settings
 --
@@ -16,7 +15,6 @@ CREATE EXTENSION IF NOT EXISTS pg_cron;
 --   ) AS request_id;
 --   $$
 -- );
-
 -- 2. Monthly Attendance Breakdown at the end of every month
 -- Invokes edge function which dynamically loads the pastor email from app_settings
 --

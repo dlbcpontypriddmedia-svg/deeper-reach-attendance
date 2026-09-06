@@ -188,7 +188,8 @@ function ReportsPage() {
         const isCompleteInactivity = total >= 2 && presentCount === 0;
 
         // 3. Chronic Low Attendance: At least 3 services recorded, attendance < chronicPercentLimit%, AND absent in the most recent service
-        const isChronicLowAttendance = total >= 3 && percent < chronicPercentLimit && isLatestAbsent;
+        const isChronicLowAttendance =
+          total >= 3 && percent < chronicPercentLimit && isLatestAbsent;
 
         // 4. In a 2-service month: Missed both services
         const isMissedBothInTwo = total === 2 && presentCount === 0;

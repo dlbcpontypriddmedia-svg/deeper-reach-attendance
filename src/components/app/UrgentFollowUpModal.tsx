@@ -93,7 +93,8 @@ export function useUrgentFollowUps(): { items: UrgentFollowUpItem[]; isPopupEnab
 
       // Flag as URGENT if missed threshold or more consecutive services in a row (or all services if only 2 held)
       const isUrgent =
-        consecutiveAbsences >= threshold || (sortedPastServices.length === 2 && consecutiveAbsences === 2);
+        consecutiveAbsences >= threshold ||
+        (sortedPastServices.length === 2 && consecutiveAbsences === 2);
 
       if (isUrgent) {
         const household = households.find((h) => h.members.some((m) => m.id === member.id));

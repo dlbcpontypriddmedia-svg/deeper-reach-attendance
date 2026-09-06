@@ -108,17 +108,33 @@ Deno.serve(async (req: Request) => {
     // ==========================================
     if (reportType === "sunday") {
       const targetDate = body.date || todayStr;
+      let targetDate = body.date || todayStr;
 
       const { data: services, error: sErr } = await supabase
+      let { data: services, error: sErr } = await supabase
         .from("services")
         .select("*")
         .eq("date", targetDate);
 
       if (sErr) throw new Error(`Error fetching services: ${sErr.message}`);
 
+      // If no services on target date (e.g. today has no services yet or test trigger), fetch the latest service
+      if (!services || services.length === 0) {
+        const { data: latestServices } = await supabase
+          .from("services")
+          .select("*")
+          .order("date", { ascending: false })
+          .limit(1);
+
+        if (latestServices && latestServices.length > 0) {
+          services = latestServices;
+        }
+      }
+
       if (!services || services.length === 0) {
         return new Response(
           JSON.stringify({ message: "No services found for date", date: targetDate }),
+          JSON.stringify({ message: "No services found in database.", date: targetDate }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 },
         );
       }
