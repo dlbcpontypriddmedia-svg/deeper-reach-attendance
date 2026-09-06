@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/hooks/use-session";
+import { useIdleTimeout } from "@/hooks/use-idle-timeout";
 import { initials } from "@/lib/data";
 import { Button } from "@/components/ui/button";
 import { BrandLockup } from "./Brand";
@@ -20,6 +21,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   const { name, role, isAdmin } = useSession();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+
+  // Auto logout after 10 minutes of inactivity
+  useIdleTimeout(10 * 60 * 1000);
 
   const signOut = async () => {
     await queryClient.cancelQueries();
