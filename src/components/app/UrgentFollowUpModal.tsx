@@ -9,6 +9,7 @@ import {
   servicesQuery,
   type Member,
 } from "@/lib/data";
+import { fetchAllSettings } from "@/lib/settings";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -29,12 +30,16 @@ export interface UrgentFollowUpItem {
   reason: string;
 }
 
-export function useUrgentFollowUps(): UrgentFollowUpItem[] {
+export function useUrgentFollowUps(): { items: UrgentFollowUpItem[]; isPopupEnabled: boolean } {
   const members = useQuery(membersQuery);
   const services = useQuery(servicesQuery);
   const attendance = useQuery(attendanceQuery);
+  const settings = useQuery({ queryKey: ["app_settings"], queryFn: fetchAllSettings });
 
-  return useMemo(() => {
+  const threshold = settings.data?.follow_up?.consecutive_absence_threshold ?? 3;
+  const isPopupEnabled = settings.data?.follow_up?.popup_alert_enabled ?? true;
+
+  const items = useMemo(() => {
     const memberList = members.data ?? [];
     const allServices = services.data ?? [];
     const allRecords = attendance.data ?? [];
@@ -86,9 +91,9 @@ export function useUrgentFollowUps(): UrgentFollowUpItem[] {
         }
       }
 
-      // Flag as URGENT if missed 3 or more consecutive services in a row (or all services if only 2 held)
+      // Flag as URGENT if missed threshold or more consecutive services in a row (or all services if only 2 held)
       const isUrgent =
-        consecutiveAbsences >= 3 || (sortedPastServices.length === 2 && consecutiveAbsences === 2);
+        consecutiveAbsences >= threshold || (sortedPastServices.length === 2 && consecutiveAbsences === 2);
 
       if (isUrgent) {
         const household = households.find((h) => h.members.some((m) => m.id === member.id));
@@ -105,15 +110,17 @@ export function useUrgentFollowUps(): UrgentFollowUpItem[] {
 
     // Sort by highest absence streak
     return urgentList.sort((a, b) => b.consecutiveAbsences - a.consecutiveAbsences);
-  }, [members.data, services.data, attendance.data]);
+  }, [members.data, services.data, attendance.data, threshold]);
+
+  return { items, isPopupEnabled };
 }
 
 export function UrgentFollowUpModal() {
-  const urgentMembers = useUrgentFollowUps();
+  const { items: urgentMembers, isPopupEnabled } = useUrgentFollowUps();
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    if (urgentMembers.length === 0) return;
+    if (!isPopupEnabled || urgentMembers.length === 0) return;
 
     // Check if dismissed in this session
     if (typeof window !== "undefined") {
@@ -127,7 +134,7 @@ export function UrgentFollowUpModal() {
 
       return () => clearTimeout(timer);
     }
-  }, [urgentMembers.length]);
+  }, [urgentMembers.length, isPopupEnabled]);
 
   const handleDismiss = () => {
     if (typeof window !== "undefined") {
@@ -136,7 +143,7 @@ export function UrgentFollowUpModal() {
     setOpen(false);
   };
 
-  if (urgentMembers.length === 0) return null;
+  if (!isPopupEnabled || urgentMembers.length === 0) return null;
 
   return (
     <Dialog open={open} onOpenChange={(val) => !val && handleDismiss()}>

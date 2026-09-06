@@ -29,6 +29,7 @@ import {
   membersQuery,
   servicesQuery,
 } from "@/lib/data";
+import { fetchAllSettings } from "@/lib/settings";
 import { PageHeading } from "@/components/app/AppShell";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -71,6 +72,10 @@ function ReportsPage() {
     () => new Set((members.data ?? []).filter((m) => m.is_worker).map((m) => m.id)),
     [members.data],
   );
+
+  const settings = useQuery({ queryKey: ["app_settings"], queryFn: fetchAllSettings });
+  const threshold = settings.data?.follow_up?.consecutive_absence_threshold ?? 3;
+  const chronicPercentLimit = settings.data?.follow_up?.chronic_absence_rate_percent ?? 40;
 
   const monthServices = useMemo(
     () =>
@@ -176,14 +181,14 @@ function ReportsPage() {
         const household = households.find((h) => h.members.some((m) => m.id === member.id));
 
         // Strict Criteria for Genuine Follow-Up:
-        // 1. Critical: Missed 3+ consecutive services in a row
-        const isProlongedAbsence = consecutiveAbsences >= 3;
+        // 1. Critical: Missed threshold+ consecutive services in a row
+        const isProlongedAbsence = consecutiveAbsences >= threshold;
 
         // 2. Critical: Complete Inactivity (0% attendance over all recorded services)
         const isCompleteInactivity = total >= 2 && presentCount === 0;
 
-        // 3. Chronic Low Attendance: At least 3 services recorded, attendance < 40%, AND absent in the most recent service
-        const isChronicLowAttendance = total >= 3 && percent < 40 && isLatestAbsent;
+        // 3. Chronic Low Attendance: At least 3 services recorded, attendance < chronicPercentLimit%, AND absent in the most recent service
+        const isChronicLowAttendance = total >= 3 && percent < chronicPercentLimit && isLatestAbsent;
 
         // 4. In a 2-service month: Missed both services
         const isMissedBothInTwo = total === 2 && presentCount === 0;
@@ -201,9 +206,9 @@ function ReportsPage() {
         let severity: "critical" | "warning" = "warning";
         let reason = "";
 
-        if (isCompleteInactivity || consecutiveAbsences >= 3) {
+        if (isCompleteInactivity || consecutiveAbsences >= threshold) {
           severity = "critical";
-          if (consecutiveAbsences >= 3) {
+          if (consecutiveAbsences >= threshold) {
             reason = `Missed last ${consecutiveAbsences} services in a row`;
           } else {
             reason = `Absent for all ${total} services this month`;
