@@ -60,8 +60,24 @@ Deno.serve(async (req: Request) => {
     const londonHour = parseInt(partMap.hour || "0", 10);
     const todayStr = `${partMap.year}-${partMap.month}-${partMap.day}`;
 
-    // If not forced: check if Sunday and >= 3:00 PM (15:00) London time
+    // Read dynamic settings from app_settings
+    const { data: dbSettings } = await supabase.from("app_settings").select("id, value");
+    const settingsMap: Record<string, any> = {};
+    if (dbSettings) {
+      for (const row of dbSettings) {
+        settingsMap[row.id] = row.value;
+      }
+    }
+    const cronSettings = settingsMap["cron_jobs"] || {};
+
+    // If not forced: check if Sunday and if reminder is enabled in settings
     if (!body.force) {
+      if (cronSettings.sunday_reminder_enabled === false) {
+        return new Response(
+          JSON.stringify({ message: "Sunday reminder is disabled in settings.", skipped: true }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 },
+        );
+      }
       if (!isSunday) {
         return new Response(
           JSON.stringify({

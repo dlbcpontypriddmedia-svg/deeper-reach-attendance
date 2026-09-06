@@ -160,7 +160,10 @@ export function UrgentFollowUpModal() {
             Urgent Follow-Up Required
           </DialogTitle>
           <DialogDescription className="text-xs sm:text-sm text-foreground/80 mt-1 max-w-xs mx-auto font-medium">
-            <strong>{urgentMembers.length} {urgentMembers.length === 1 ? "member has" : "members have"}</strong> missed 3+ consecutive services. Please reach out to them today.
+            <strong>
+              {urgentMembers.length} {urgentMembers.length === 1 ? "member has" : "members have"}
+            </strong>{" "}
+            missed 3+ consecutive services. Please reach out to them today.
           </DialogDescription>
         </div>
 

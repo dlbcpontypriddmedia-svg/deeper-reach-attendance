@@ -37,7 +37,21 @@ Deno.serve(async (req: Request) => {
       // Empty body
     }
 
-    const recipient = body.targetEmail || "stedarol@gmail.com";
+    // Read dynamic settings from app_settings table
+    const { data: dbSettings } = await supabase.from("app_settings").select("id, value");
+    const settingsMap: Record<string, any> = {};
+    if (dbSettings) {
+      for (const row of dbSettings) {
+        settingsMap[row.id] = row.value;
+      }
+    }
+
+    const generalSettings = settingsMap["general"] || {};
+    const cronSettings = settingsMap["cron_jobs"] || {};
+
+    const configuredEmail = generalSettings.pastor_email || "stedarol@gmail.com";
+    const recipient = body.targetEmail || configuredEmail;
+
     const timeZone = "Europe/London";
     const now = new Date();
 
@@ -63,6 +77,22 @@ Deno.serve(async (req: Request) => {
     const currentMonthStr = `${partMap.year}-${partMap.month}`;
 
     const reportType = body.type || (partMap.weekday === "Sun" ? "sunday" : "monthly");
+
+    // Check if report cron is enabled in settings
+    if (!body.force) {
+      if (reportType === "sunday" && cronSettings.sunday_summary_enabled === false) {
+        return new Response(
+          JSON.stringify({ message: "Sunday summary email is disabled in settings.", skipped: true }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 },
+        );
+      }
+      if (reportType === "monthly" && cronSettings.monthly_report_enabled === false) {
+        return new Response(
+          JSON.stringify({ message: "Monthly summary report is disabled in settings.", skipped: true }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 },
+        );
+      }
+    }
 
     // ==========================================
     // 1. SUNDAY ATTENDANCE SUMMARY (EXACT FORMAT)

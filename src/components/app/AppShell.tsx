@@ -10,6 +10,8 @@ import {
   Bell,
   AlertTriangle,
   X,
+  Settings,
+  Hammer,
 } from "lucide-react";
 import type { ReactNode } from "react";
 
@@ -17,6 +19,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/hooks/use-session";
 import { useIdleTimeout } from "@/hooks/use-idle-timeout";
 import { useAttendanceReminders } from "@/hooks/use-attendance-reminders";
+import { useQuery } from "@tanstack/react-query";
+import { fetchAllSettings } from "@/lib/settings";
 import { initials } from "@/lib/data";
 import { Button } from "@/components/ui/button";
 import { BrandLockup } from "./Brand";
@@ -29,6 +33,7 @@ const NAV = [
   { to: "/reports", label: "Analysis", icon: BarChart3 },
   { to: "/audit", label: "Audit Log", icon: History },
   { to: "/accounts", label: "Accounts", icon: KeyRound, adminOnly: true },
+  { to: "/settings", label: "Settings", icon: Settings, adminOnly: true },
 ] as const;
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -42,6 +47,17 @@ export function AppShell({ children }: { children: ReactNode }) {
     requestNotificationPermission,
     dismissReminder,
   } = useAttendanceReminders();
+
+  const settingsQuery = useQuery({
+    queryKey: ["app_settings"],
+    queryFn: fetchAllSettings,
+    staleTime: 60 * 1000,
+  });
+
+  const isMaintenanceActive = settingsQuery.data?.general?.maintenance_mode;
+  const maintenanceMsg =
+    settingsQuery.data?.general?.maintenance_message ||
+    "System is currently undergoing scheduled maintenance. Please check back shortly.";
 
   // Auto logout after 10 minutes of inactivity
   useIdleTimeout(10 * 60 * 1000);
@@ -113,6 +129,23 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         </nav>
       </header>
+
+      {/* Maintenance Mode Banner */}
+      {isMaintenanceActive && (
+        <div className="bg-amber-500/15 border-b border-amber-500/30 px-4 py-2.5 sm:px-6">
+          <div className="mx-auto flex max-w-6xl items-center gap-3">
+            <div className="bg-amber-500 text-white rounded-lg p-1.5 shrink-0">
+              <Hammer className="h-4 w-4" />
+            </div>
+            <div className="text-xs sm:text-sm font-medium text-amber-950 dark:text-amber-200">
+              <strong className="font-semibold">Maintenance Mode Active:</strong> {maintenanceMsg}{" "}
+              {isAdmin && (
+                <span className="opacity-75 text-[11px]">(Admins have full override access)</span>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Urgent Sunday Attendance Reminder Banner */}
       {isReminderActive && pendingService && (
