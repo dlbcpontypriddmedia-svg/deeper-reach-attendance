@@ -111,7 +111,8 @@ export function NotificationPromptModal() {
                 <CheckCircle2 className="h-4 w-4" />
               </div>
               <span>
-                <strong>Sunday 3:00 PM Alerts:</strong> Timely reminder if Sunday attendance is still unsubmitted.
+                <strong>Sunday 3:00 PM Alerts:</strong> Timely reminder if Sunday attendance is
+                still unsubmitted.
               </span>
             </li>
             <li className="flex items-start gap-2.5">
@@ -119,7 +120,8 @@ export function NotificationPromptModal() {
                 <CheckCircle2 className="h-4 w-4" />
               </div>
               <span>
-                <strong>Instant 1-Click Access:</strong> Click any notification to open the attendance form directly.
+                <strong>Instant 1-Click Access:</strong> Click any notification to open the
+                attendance form directly.
               </span>
             </li>
             <li className="flex items-start gap-2.5">
@@ -127,7 +129,8 @@ export function NotificationPromptModal() {
                 <ShieldCheck className="h-4 w-4" />
               </div>
               <span>
-                <strong>Smart & Quiet:</strong> Automatically pauses as soon as attendance is submitted.
+                <strong>Smart & Quiet:</strong> Automatically pauses as soon as attendance is
+                submitted.
               </span>
             </li>
           </ul>
