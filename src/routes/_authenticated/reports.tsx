@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { addMonths, format, isSameMonth, parseISO } from "date-fns";
-import { AlertTriangle, ChevronLeft, ChevronRight } from "lucide-react";
+import { AlertTriangle, ChevronLeft, ChevronRight, Phone, HeartHandshake, CheckCircle2 } from "lucide-react";
 import {
   Bar,
   BarChart,
@@ -132,34 +132,99 @@ function ReportsPage() {
   const overall = totalRows ? Math.round((totalPresent / totalRows) * 100) : 0;
 
   const concerns = useMemo(() => {
-    const orderedServices = monthServices;
+    // Only evaluate services where attendance records have actually been recorded
+    const recordedServiceIds = new Set((attendance.data ?? []).map((r) => r.service_id));
+    const activeRecordedServices = monthServices.filter((s) => recordedServiceIds.has(s.id));
+    const totalRecordedCount = activeRecordedServices.length;
+
+    // If fewer than 2 services recorded in the evaluated period, don't flag anyone (insufficient sample size)
+    if (totalRecordedCount < 2) {
+      return [];
+    }
+
     return (members.data ?? [])
       .filter((member) => scope === "everyone" || workerIds.has(member.id))
       .map((member) => {
-        const rows = orderedServices
+        const rows = activeRecordedServices
           .map((s) => records.find((r) => r.service_id === s.id && r.member_id === member.id))
           .filter(Boolean);
+
         const total = rows.length;
-        const present = rows.filter((r) => r!.status === "present").length;
-        let streak = 0;
+        if (total === 0) return null;
+
+        const presentCount = rows.filter((r) => r!.status === "present").length;
+        const percent = Math.round((presentCount / total) * 100);
+
+        // Calculate consecutive absences ending at the most recent service
+        let consecutiveAbsences = 0;
         for (let i = rows.length - 1; i >= 0; i -= 1) {
-          if (rows[i]!.status === "absent") streak += 1;
-          else break;
+          if (rows[i]!.status === "absent") {
+            consecutiveAbsences += 1;
+          } else {
+            break;
+          }
         }
+
+        const isLatestAbsent = rows[rows.length - 1]?.status === "absent";
         const household = households.find((h) => h.members.some((m) => m.id === member.id));
+
+        // Strict Criteria for Genuine Follow-Up:
+        // 1. Critical: Missed 3+ consecutive services in a row
+        const isProlongedAbsence = consecutiveAbsences >= 3;
+
+        // 2. Critical: Complete Inactivity (0% attendance over all recorded services)
+        const isCompleteInactivity = total >= 2 && presentCount === 0;
+
+        // 3. Chronic Low Attendance: At least 3 services recorded, attendance < 40%, AND absent in the most recent service
+        const isChronicLowAttendance = total >= 3 && percent < 40 && isLatestAbsent;
+
+        // 4. In a 2-service month: Missed both services
+        const isMissedBothInTwo = total === 2 && presentCount === 0;
+
+        if (!isProlongedAbsence && !isCompleteInactivity && !isChronicLowAttendance && !isMissedBothInTwo) {
+          return null;
+        }
+
+        // Determine severity level and human-readable reason
+        let severity: "critical" | "warning" = "warning";
+        let reason = "";
+
+        if (isCompleteInactivity || consecutiveAbsences >= 3) {
+          severity = "critical";
+          if (consecutiveAbsences >= 3) {
+            reason = `Missed last ${consecutiveAbsences} services in a row`;
+          } else {
+            reason = `Absent for all ${total} services this month`;
+          }
+        } else if (isChronicLowAttendance) {
+          severity = "warning";
+          reason = `Attended only ${presentCount} of ${total} services (${percent}%)`;
+        } else {
+          severity = "warning";
+          reason = `Missed last ${consecutiveAbsences} services`;
+        }
+
         return {
           id: member.id,
           name: member.name,
+          contact: member.contact || null,
           household: household?.label ?? "Unknown",
           total,
-          percent: total ? Math.round((present / total) * 100) : 0,
-          streak,
+          presentCount,
+          percent,
+          streak: consecutiveAbsences,
+          severity,
+          reason,
         };
       })
-      .filter((row) => row.total > 0 && (row.percent < 50 || row.streak >= 2))
-      .sort((a, b) => b.streak - a.streak || a.percent - b.percent)
-      .slice(0, 12);
-  }, [members.data, records, monthServices, households, scope, workerIds]);
+      .filter((row): row is NonNullable<typeof row> => Boolean(row))
+      .sort((a, b) => {
+        if (a.severity === "critical" && b.severity !== "critical") return -1;
+        if (b.severity === "critical" && a.severity !== "critical") return 1;
+        return b.streak - a.streak || a.percent - b.percent;
+      })
+      .slice(0, 15);
+  }, [members.data, records, monthServices, households, scope, workerIds, attendance.data]);
 
   const options =
     view === "member"
@@ -310,30 +375,99 @@ function ReportsPage() {
             </div>
           </div>
 
-          <div className="surface p-5 lg:col-span-3">
-            <h2 className="flex items-center gap-2 text-lg font-semibold">
-              <AlertTriangle className="text-destructive h-4 w-4" /> Needs follow-up
-            </h2>
-            {concerns.length === 0 ? (
-              <p className="text-muted-foreground mt-4 text-sm">Nothing to flag.</p>
-            ) : (
-              <ul className="divide-border mt-3 divide-y">
-                {concerns.map((row) => (
-                  <li key={row.id} className="flex items-center gap-3 py-3">
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm font-medium">{row.name}</div>
-                      <div className="text-muted-foreground text-xs">{row.household}</div>
-                    </div>
-                    {row.streak >= 2 && (
-                      <span className="bg-destructive/10 text-destructive rounded-full px-2.5 py-1 text-xs font-semibold">
-                        {row.streak} in a row
-                      </span>
-                    )}
-                    <span className="font-display w-14 text-right text-lg font-semibold">
-                      {row.percent}%
+          <div className="surface p-5 lg:col-span-3 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 pb-3">
+              <div>
+                <h2 className="flex items-center gap-2 text-lg font-bold">
+                  <AlertTriangle className="text-amber-500 h-5 w-5" /> Requires Follow-up
+                  {concerns.length > 0 && (
+                    <span className="rounded-full bg-destructive/15 text-destructive px-2.5 py-0.5 text-xs font-semibold">
+                      {concerns.length} {concerns.length === 1 ? "person" : "people"}
                     </span>
-                  </li>
-                ))}
+                  )}
+                </h2>
+                <p className="text-muted-foreground text-xs mt-0.5">
+                  Members with prolonged absence streaks (3+ in a row) or chronic low attendance.
+                </p>
+              </div>
+            </div>
+
+            {concerns.length === 0 ? (
+              <div className="py-8 text-center space-y-1">
+                <CheckCircle2 className="mx-auto h-8 w-8 text-emerald-500 opacity-80" />
+                <p className="text-sm font-semibold text-foreground">No urgent follow-ups</p>
+                <p className="text-xs text-muted-foreground">
+                  All active members are attending faithfully or are up to date.
+                </p>
+              </div>
+            ) : (
+              <ul className="divide-border divide-y">
+                {concerns.map((row) => {
+                  const isCritical = row.severity === "critical";
+
+                  return (
+                    <li key={row.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 py-3.5">
+                      <div className="flex items-start gap-3 min-w-0">
+                        <div
+                          className={`mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-xl text-xs font-bold ${
+                            isCritical
+                              ? "bg-destructive/15 text-destructive"
+                              : "bg-amber-500/15 text-amber-700 dark:text-amber-300"
+                          }`}
+                        >
+                          {isCritical ? "!" : "•"}
+                        </div>
+
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-semibold text-sm text-foreground">{row.name}</span>
+                            <span
+                              className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
+                                isCritical
+                                  ? "bg-destructive/15 text-destructive"
+                                  : "bg-amber-500/15 text-amber-700 dark:text-amber-300"
+                              }`}
+                            >
+                              {row.reason}
+                            </span>
+                          </div>
+
+                          <div className="text-muted-foreground mt-0.5 flex flex-wrap items-center gap-2 text-xs">
+                            <span>Household: {row.household}</span>
+                            {row.contact && (
+                              <>
+                                <span>·</span>
+                                <a
+                                  href={`tel:${row.contact}`}
+                                  className="inline-flex items-center gap-1 text-primary hover:underline font-medium"
+                                >
+                                  <Phone className="h-3 w-3" />
+                                  {row.contact}
+                                </a>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0 pt-2 sm:pt-0 border-t border-border/30 sm:border-t-0">
+                        <div className="text-right">
+                          <div className="text-[10px] uppercase text-muted-foreground font-medium">Attendance</div>
+                          <div className="font-semibold text-sm text-foreground">
+                            {row.presentCount} / {row.total} services
+                          </div>
+                        </div>
+                        <span
+                          className={`font-display w-14 text-right text-lg font-bold ${
+                            isCritical ? "text-destructive" : "text-amber-600 dark:text-amber-400"
+                          }`}
+                        >
+                          {row.percent}%
+                        </span>
+                      </div>
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </div>
