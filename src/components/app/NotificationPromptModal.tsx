@@ -54,7 +54,8 @@ export function NotificationPromptModal() {
 
     if (!("Notification" in window)) {
       toast.info("Notifications on iPhone", {
-        description: "Tap Share (⎋) in Safari and choose 'Add to Home Screen' to enable notifications.",
+        description:
+          "Tap Share (⎋) in Safari and choose 'Add to Home Screen' to enable notifications.",
       });
       setOpen(false);
       return;
@@ -104,9 +105,7 @@ export function NotificationPromptModal() {
           <Bell className="h-7 w-7 animate-bounce" />
         </div>
 
-        <DialogTitle className="text-lg font-bold">
-          Enable Attendance Reminders
-        </DialogTitle>
+        <DialogTitle className="text-lg font-bold">Enable Attendance Reminders</DialogTitle>
 
         <DialogDescription className="text-muted-foreground text-xs sm:text-sm mt-1.5 leading-relaxed">
           {isIOSWithoutPWA
@@ -142,7 +141,11 @@ export function NotificationPromptModal() {
             type="button"
             variant={isIOSWithoutPWA ? "default" : "ghost"}
             size="sm"
-            className={isIOSWithoutPWA ? "h-11 w-full text-sm font-semibold" : "text-muted-foreground text-xs h-9"}
+            className={
+              isIOSWithoutPWA
+                ? "h-11 w-full text-sm font-semibold"
+                : "text-muted-foreground text-xs h-9"
+            }
             onClick={handleDismiss}
           >
             {isIOSWithoutPWA ? "Got It" : "Maybe Later"}
