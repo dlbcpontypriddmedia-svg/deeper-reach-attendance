@@ -21,10 +21,10 @@ GRANT ALL ON public.audit_logs TO service_role;
 
 ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS Authenticated users can view audit logs ON public.audit_logs;
-CREATE POLICY Authenticated users can view audit logs ON public.audit_logs
+DROP POLICY IF EXISTS "Authenticated users can view audit logs" ON public.audit_logs;
+CREATE POLICY "Authenticated users can view audit logs" ON public.audit_logs
   FOR SELECT TO authenticated USING (true);
 
-DROP POLICY IF EXISTS Authenticated users can insert audit logs ON public.audit_logs;
-CREATE POLICY Authenticated users can insert audit logs ON public.audit_logs
+DROP POLICY IF EXISTS "Authenticated users can insert audit logs" ON public.audit_logs;
+CREATE POLICY "Authenticated users can insert audit logs" ON public.audit_logs
   FOR INSERT TO authenticated WITH CHECK (true);
