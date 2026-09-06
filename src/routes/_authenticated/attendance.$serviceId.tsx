@@ -37,6 +37,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PageHeading } from "@/components/app/AppShell";
 import { buildAttendanceSummary } from "@/lib/summary";
+import { logActivity } from "@/lib/audit";
 
 export const Route = createFileRoute("/_authenticated/attendance/$serviceId")({
   head: () => ({
@@ -309,7 +310,7 @@ function AttendancePage() {
     mutationFn: async () => {
       const { data: session } = await supabase.auth.getUser();
 
-      // Update visitor counts on service
+      // Update visitor counts, taken_by, and updated_by on service
       const { error: serviceError } = await supabase
         .from("services")
         .update({
@@ -320,8 +321,11 @@ function AttendancePage() {
           visitor_child_male: visitors.child_male,
           visitor_child_female: visitors.child_female,
           visitor_notes: visitors.notes.trim() || null,
-          taken_by_name: currentUserName || "Attendance Taker",
-          taken_by_id: session.user?.id ?? null,
+          taken_by_name: service.data?.taken_by_name || currentUserName || "Attendance Taker",
+          taken_by_id: service.data?.taken_by_id || session.user?.id || null,
+          updated_by_name: currentUserName || "Attendance Taker",
+          updated_by_id: session.user?.id ?? null,
+          updated_at: new Date().toISOString(),
         })
         .eq("id", serviceId);
 
@@ -339,6 +343,21 @@ function AttendancePage() {
           .upsert(rows, { onConflict: "service_id,member_id" });
         if (error) throw new Error(error.message);
       }
+
+      void logActivity({
+        action: editing || alreadyRecorded ? "attendance_updated" : "attendance_taken",
+        entityType: "attendance",
+        entityId: serviceId,
+        entityTitle: `${service.data?.name || "Service"} (${service.data?.date || ""})`,
+        details: {
+          total_present: totalPresent,
+          members_present: memberPresentCount,
+          members_absent: allMembers.length - memberPresentCount,
+          visitors: totalVisitors,
+          visitor_notes: visitors.notes.trim() || null,
+          is_edit: editing || alreadyRecorded,
+        },
+      });
 
       // Broadcast submitted event to other users on the page
       if (channelRef.current) {

@@ -8,6 +8,53 @@ export type Database = {
   };
   public: {
     Tables: {
+      audit_logs: {
+        Row: {
+          action: string;
+          actor_email: string | null;
+          actor_id: string | null;
+          actor_name: string;
+          created_at: string;
+          details: Json;
+          entity_id: string | null;
+          entity_title: string | null;
+          entity_type: string;
+          id: string;
+        };
+        Insert: {
+          action: string;
+          actor_email?: string | null;
+          actor_id?: string | null;
+          actor_name: string;
+          created_at?: string;
+          details?: Json;
+          entity_id?: string | null;
+          entity_title?: string | null;
+          entity_type: string;
+          id?: string;
+        };
+        Update: {
+          action?: string;
+          actor_email?: string | null;
+          actor_id?: string | null;
+          actor_name?: string;
+          created_at?: string;
+          details?: Json;
+          entity_id?: string | null;
+          entity_title?: string | null;
+          entity_type?: string;
+          id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "audit_logs_actor_id_fkey";
+            columns: ["actor_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       attendance_records: {
         Row: {
           created_at: string;
@@ -142,6 +189,8 @@ export type Database = {
           visitor_notes: string | null;
           taken_by_name: string | null;
           taken_by_id: string | null;
+          updated_by_name: string | null;
+          updated_by_id: string | null;
         };
         Insert: {
           created_at?: string;
@@ -160,6 +209,8 @@ export type Database = {
           visitor_notes?: string | null;
           taken_by_name?: string | null;
           taken_by_id?: string | null;
+          updated_by_name?: string | null;
+          updated_by_id?: string | null;
         };
         Update: {
           created_at?: string;
@@ -178,6 +229,8 @@ export type Database = {
           visitor_notes?: string | null;
           taken_by_name?: string | null;
           taken_by_id?: string | null;
+          updated_by_name?: string | null;
+          updated_by_id?: string | null;
         };
         Relationships: [];
       };

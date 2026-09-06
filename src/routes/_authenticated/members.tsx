@@ -18,6 +18,7 @@ import {
 } from "@/lib/data";
 import type { Database } from "@/integrations/supabase/types";
 import { PageHeading } from "@/components/app/AppShell";
+import { logActivity } from "@/lib/audit";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -443,15 +444,34 @@ function AddMemberDialog() {
 
   const create = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase.from("members").insert({
-        name: name.trim(),
-        contact: contact.trim() || null,
-        category,
-        gender,
-        is_worker: isWorker,
-        guardian_id: category === "adult" ? null : guardianId,
-      });
+      const trimmedName = name.trim();
+      const { data, error } = await supabase
+        .from("members")
+        .insert({
+          name: trimmedName,
+          contact: contact.trim() || null,
+          category,
+          gender,
+          is_worker: isWorker,
+          guardian_id: category === "adult" ? null : guardianId,
+        })
+        .select()
+        .single();
       if (error) throw new Error(error.message);
+
+      void logActivity({
+        action: "member_created",
+        entityType: "member",
+        entityId: data?.id,
+        entityTitle: trimmedName,
+        details: {
+          name: trimmedName,
+          category,
+          gender,
+          is_worker: isWorker,
+          contact: contact.trim() || null,
+        },
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["members"] });
@@ -553,10 +573,11 @@ function EditMemberDialog({ member, onClose }: { member: Member | null; onClose:
   const save = useMutation({
     mutationFn: async () => {
       if (!member) return;
+      const trimmedName = name.trim();
       const { error } = await supabase
         .from("members")
         .update({
-          name: name.trim(),
+          name: trimmedName,
           contact: contact.trim() || null,
           category,
           gender,
@@ -565,6 +586,27 @@ function EditMemberDialog({ member, onClose }: { member: Member | null; onClose:
         })
         .eq("id", member.id);
       if (error) throw new Error(error.message);
+
+      void logActivity({
+        action: "member_updated",
+        entityType: "member",
+        entityId: member.id,
+        entityTitle: trimmedName,
+        details: {
+          old: {
+            name: member.name,
+            category: member.category,
+            gender: member.gender,
+            is_worker: member.is_worker,
+          },
+          new: {
+            name: trimmedName,
+            category,
+            gender,
+            is_worker: isWorker,
+          },
+        },
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["members"] });
@@ -579,6 +621,18 @@ function EditMemberDialog({ member, onClose }: { member: Member | null; onClose:
       if (!member) return;
       const { error } = await supabase.from("members").delete().eq("id", member.id);
       if (error) throw new Error(error.message);
+
+      void logActivity({
+        action: "member_deleted",
+        entityType: "member",
+        entityId: member.id,
+        entityTitle: member.name,
+        details: {
+          name: member.name,
+          category: member.category,
+          gender: member.gender,
+        },
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["members"] });

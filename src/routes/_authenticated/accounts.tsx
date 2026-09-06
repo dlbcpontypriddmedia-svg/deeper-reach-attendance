@@ -1,4 +1,4 @@
-﻿import { useState } from "react";
+import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { KeyRound, Mail, ShieldCheck, UserCheck, UserCog, UserPlus } from "lucide-react";
@@ -12,6 +12,7 @@ import {
   setAccountRole,
   type AccountRole,
 } from "@/lib/accounts.functions";
+import { logActivity } from "@/lib/audit";
 import { PageHeading } from "@/components/app/AppShell";
 import { Button } from "@/components/ui/button";
 import {
@@ -47,8 +48,24 @@ function AccountsPage() {
   });
 
   const setRole = useMutation({
-    mutationFn: ({ userId, role }: { userId: string; role: AccountRole }) =>
-      setAccountRole(userId, role),
+    mutationFn: async ({
+      userId,
+      role,
+      accountName,
+    }: {
+      userId: string;
+      role: AccountRole;
+      accountName?: string;
+    }) => {
+      await setAccountRole(userId, role);
+      void logActivity({
+        action: "role_updated",
+        entityType: "account",
+        entityId: userId,
+        entityTitle: accountName || "User Account",
+        details: { role },
+      });
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["accounts"] });
       toast.success("Role updated");
@@ -143,7 +160,13 @@ function AccountsPage() {
                         : "text-muted-foreground hover:text-foreground"
                     }`}
                     disabled={isCurrentUser || setRole.isPending}
-                    onClick={() => setRole.mutate({ userId: account.id, role: "admin" })}
+                    onClick={() =>
+                      setRole.mutate({
+                        userId: account.id,
+                        role: "admin",
+                        accountName: account.name || account.email,
+                      })
+                    }
                   >
                     <KeyRound className="mr-1.5 h-3.5 w-3.5" /> Admin
                   </Button>
@@ -157,7 +180,11 @@ function AccountsPage() {
                     }`}
                     disabled={isCurrentUser || setRole.isPending}
                     onClick={() =>
-                      setRole.mutate({ userId: account.id, role: "attendance_taker" })
+                      setRole.mutate({
+                        userId: account.id,
+                        role: "attendance_taker",
+                        accountName: account.name || account.email,
+                      })
                     }
                   >
                     <UserCheck className="mr-1.5 h-3.5 w-3.5" /> Taker
@@ -195,7 +222,16 @@ function CreateAccountDialog({ onCreated }: { onCreated: () => void }) {
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<AccountRole>("attendance_taker");
   const create = useMutation({
-    mutationFn: () => createAccount({ name, email, password, role }),
+    mutationFn: async () => {
+      const res = await createAccount({ name, email, password, role });
+      void logActivity({
+        action: "role_updated",
+        entityType: "account",
+        entityTitle: name || email,
+        details: { email, role, action: "account_created" },
+      });
+      return res;
+    },
     onSuccess: () => {
       toast.success("Account created");
       onCreated();

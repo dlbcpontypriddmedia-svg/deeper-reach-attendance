@@ -25,6 +25,7 @@ import {
   type Service,
   type ServiceType,
 } from "@/lib/data";
+import { logActivity } from "@/lib/audit";
 import { PageHeading } from "@/components/app/AppShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -184,6 +185,15 @@ function ServicesPage() {
                           </span>
                         </>
                       )}
+                      {service.updated_by_name && (
+                        <>
+                          <span aria-hidden>·</span>
+                          <span className="bg-secondary text-secondary-foreground inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-medium text-[11px]">
+                            <Pencil className="h-2.5 w-2.5 shrink-0" /> Updated by{" "}
+                            {service.updated_by_name}
+                          </span>
+                        </>
+                      )}
                     </div>
                   </div>
 
@@ -308,6 +318,14 @@ function NewServiceDialog() {
       }
       const { error } = await supabase.from("services").insert(rows);
       if (error) throw new Error(error.message);
+
+      void logActivity({
+        action: "service_created",
+        entityType: "service",
+        entityTitle: `${name} (${date})`,
+        details: { name, type, date, repeat, count: rows.length },
+      });
+
       return rows.length;
     },
     onSuccess: (count) => {
@@ -410,6 +428,7 @@ function NewServiceDialog() {
 
 function EditServiceDialog({ service, onClose }: { service: Service | null; onClose: () => void }) {
   const queryClient = useQueryClient();
+  const { name: currentUserName, userId: currentUserId } = useSession();
   const [name, setName] = useState("");
   const [type, setType] = useState<ServiceType>("recurring");
   const [date, setDate] = useState("");
@@ -425,15 +444,30 @@ function EditServiceDialog({ service, onClose }: { service: Service | null; onCl
   const update = useMutation({
     mutationFn: async () => {
       if (!service) return;
+      const trimmedName = name.trim();
       const { error } = await supabase
         .from("services")
         .update({
-          name: name.trim(),
+          name: trimmedName,
           type,
           date,
+          updated_by_name: currentUserName || "User",
+          updated_by_id: currentUserId || null,
+          updated_at: new Date().toISOString(),
         })
         .eq("id", service.id);
       if (error) throw new Error(error.message);
+
+      void logActivity({
+        action: "service_updated",
+        entityType: "service",
+        entityId: service.id,
+        entityTitle: `${trimmedName} (${date})`,
+        details: {
+          old: { name: service.name, date: service.date, type: service.type },
+          new: { name: trimmedName, date, type },
+        },
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["services"] });
@@ -538,6 +572,19 @@ function DeleteServiceDialog({
 
       const { error } = await supabase.from("services").delete().eq("id", service.id);
       if (error) throw new Error(error.message);
+
+      void logActivity({
+        action: "service_deleted",
+        entityType: "service",
+        entityId: service.id,
+        entityTitle: `${service.name} (${service.date})`,
+        details: {
+          name: service.name,
+          date: service.date,
+          type: service.type,
+          visitors: getServiceVisitorTotal(service),
+        },
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["services"] });

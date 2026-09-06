@@ -1,6 +1,6 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { LogOut, Users, CalendarDays, BarChart3, KeyRound } from "lucide-react";
+import { LogOut, Users, CalendarDays, BarChart3, KeyRound, History } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -14,6 +14,7 @@ const NAV = [
   { to: "/dashboard", label: "Services", icon: CalendarDays },
   { to: "/members", label: "Members", icon: Users },
   { to: "/reports", label: "Analysis", icon: BarChart3 },
+  { to: "/audit", label: "Audit Log", icon: History },
   { to: "/accounts", label: "Accounts", icon: KeyRound, adminOnly: true },
 ] as const;
 
