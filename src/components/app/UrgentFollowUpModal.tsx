@@ -10,6 +10,7 @@ import {
   type Member,
 } from "@/lib/data";
 import { fetchAllSettings } from "@/lib/settings";
+import { computeFollowUpConcerns, type FollowUpConcern } from "@/lib/follow-up";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -21,16 +22,7 @@ import {
 
 const SESSION_FOLLOWUP_DISMISSED = "urgent_followup_dismissed_session";
 
-export interface UrgentFollowUpItem {
-  id: string;
-  name: string;
-  contact: string | null;
-  household: string;
-  consecutiveAbsences: number;
-  reason: string;
-}
-
-export function useUrgentFollowUps(): { items: UrgentFollowUpItem[]; isPopupEnabled: boolean } {
+export function useUrgentFollowUps(): { items: FollowUpConcern[]; isPopupEnabled: boolean } {
   const members = useQuery(membersQuery);
   const services = useQuery(servicesQuery);
   const attendance = useQuery(attendanceQuery);
@@ -44,73 +36,19 @@ export function useUrgentFollowUps(): { items: UrgentFollowUpItem[]; isPopupEnab
     const allServices = services.data ?? [];
     const allRecords = attendance.data ?? [];
 
-    if (memberList.length === 0 || allServices.length === 0 || allRecords.length === 0) {
+    if (!memberList.length || !allServices.length || !allRecords.length) {
       return [];
     }
 
-    // Find services that have attendance recorded, sorted chronologically ascending (oldest to newest)
-    const recordedServiceIds = new Set(allRecords.map((r) => r.service_id));
-    const sortedPastServices = allServices
-      .filter((s) => recordedServiceIds.has(s.id))
-      .sort((a, b) => a.date.localeCompare(b.date));
-
-    // Need at least 2 recorded services to evaluate
-    if (sortedPastServices.length < 2) return [];
-
     const households = buildHouseholds(memberList);
 
-    // Map records by memberId -> serviceId -> status
-    const recordMap = new Map<string, Map<string, string>>();
-    for (const rec of allRecords) {
-      if (!recordMap.has(rec.member_id)) {
-        recordMap.set(rec.member_id, new Map());
-      }
-      recordMap.get(rec.member_id)!.set(rec.service_id, rec.status);
-    }
-
-    const urgentList: UrgentFollowUpItem[] = [];
-
-    for (const member of memberList) {
-      const memberRecords = recordMap.get(member.id);
-      if (!memberRecords) continue;
-
-      // Count consecutive absences starting from the most recent recorded service backwards
-      let consecutiveAbsences = 0;
-      let evaluatedCount = 0;
-
-      for (let i = sortedPastServices.length - 1; i >= 0; i -= 1) {
-        const s = sortedPastServices[i];
-        const status = memberRecords.get(s.id);
-
-        if (status === "absent") {
-          consecutiveAbsences += 1;
-          evaluatedCount += 1;
-        } else if (status === "present") {
-          // Stopped absence streak
-          break;
-        }
-      }
-
-      // Flag as URGENT if missed threshold or more consecutive services in a row (or all services if only 2 held)
-      const isUrgent =
-        consecutiveAbsences >= threshold ||
-        (sortedPastServices.length === 2 && consecutiveAbsences === 2);
-
-      if (isUrgent) {
-        const household = households.find((h) => h.members.some((m) => m.id === member.id));
-        urgentList.push({
-          id: member.id,
-          name: member.name,
-          contact: member.contact || null,
-          household: household?.label ?? "Unknown",
-          consecutiveAbsences,
-          reason: `Missed last ${consecutiveAbsences} services in a row`,
-        });
-      }
-    }
-
-    // Sort by highest absence streak
-    return urgentList.sort((a, b) => b.consecutiveAbsences - a.consecutiveAbsences);
+    return computeFollowUpConcerns({
+      members: memberList,
+      services: allServices,
+      attendance: allRecords,
+      households,
+      threshold,
+    });
   }, [members.data, services.data, attendance.data, threshold]);
 
   return { items, isPopupEnabled };
@@ -186,7 +124,7 @@ export function UrgentFollowUpModal() {
                 <div className="flex items-center gap-2">
                   <span className="font-semibold text-sm truncate">{member.name}</span>
                   <span className="rounded-full bg-destructive/15 text-destructive px-2 py-0.5 text-[10px] font-bold shrink-0">
-                    {member.consecutiveAbsences} in a row
+                    {member.streak} in a row
                   </span>
                 </div>
                 <div className="text-xs text-muted-foreground mt-0.5 flex flex-wrap items-center gap-2">

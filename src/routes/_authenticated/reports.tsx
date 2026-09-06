@@ -30,6 +30,7 @@ import {
   servicesQuery,
 } from "@/lib/data";
 import { fetchAllSettings } from "@/lib/settings";
+import { computeFollowUpConcerns } from "@/lib/follow-up";
 import { PageHeading } from "@/components/app/AppShell";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -144,105 +145,26 @@ function ReportsPage() {
   const overall = totalRows ? Math.round((totalPresent / totalRows) * 100) : 0;
 
   const concerns = useMemo(() => {
-    // Only evaluate services where attendance records have actually been recorded
-    const recordedServiceIds = new Set((attendance.data ?? []).map((r) => r.service_id));
-    const activeRecordedServices = monthServices.filter((s) => recordedServiceIds.has(s.id));
-    const totalRecordedCount = activeRecordedServices.length;
-
-    // If fewer than 2 services recorded in the evaluated period, don't flag anyone (insufficient sample size)
-    if (totalRecordedCount < 2) {
-      return [];
-    }
-
-    return (members.data ?? [])
-      .filter((member) => scope === "everyone" || workerIds.has(member.id))
-      .map((member) => {
-        const rows = activeRecordedServices
-          .map((s) => records.find((r) => r.service_id === s.id && r.member_id === member.id))
-          .filter(Boolean);
-
-        const total = rows.length;
-        if (total === 0) return null;
-
-        const presentCount = rows.filter((r) => r!.status === "present").length;
-        const percent = Math.round((presentCount / total) * 100);
-
-        // Calculate consecutive absences ending at the most recent service
-        let consecutiveAbsences = 0;
-        for (let i = rows.length - 1; i >= 0; i -= 1) {
-          if (rows[i]!.status === "absent") {
-            consecutiveAbsences += 1;
-          } else {
-            break;
-          }
-        }
-
-        const isLatestAbsent = rows[rows.length - 1]?.status === "absent";
-        const household = households.find((h) => h.members.some((m) => m.id === member.id));
-
-        // Strict Criteria for Genuine Follow-Up:
-        // 1. Critical: Missed threshold+ consecutive services in a row
-        const isProlongedAbsence = consecutiveAbsences >= threshold;
-
-        // 2. Critical: Complete Inactivity (0% attendance over all recorded services)
-        const isCompleteInactivity = total >= 2 && presentCount === 0;
-
-        // 3. Chronic Low Attendance: At least 3 services recorded, attendance < chronicPercentLimit%, AND absent in the most recent service
-        const isChronicLowAttendance =
-          total >= 3 && percent < chronicPercentLimit && isLatestAbsent;
-
-        // 4. In a 2-service month: Missed both services
-        const isMissedBothInTwo = total === 2 && presentCount === 0;
-
-        if (
-          !isProlongedAbsence &&
-          !isCompleteInactivity &&
-          !isChronicLowAttendance &&
-          !isMissedBothInTwo
-        ) {
-          return null;
-        }
-
-        // Determine severity level and human-readable reason
-        let severity: "critical" | "warning" = "warning";
-        let reason = "";
-
-        if (isCompleteInactivity || consecutiveAbsences >= threshold) {
-          severity = "critical";
-          if (consecutiveAbsences >= threshold) {
-            reason = `Missed last ${consecutiveAbsences} services in a row`;
-          } else {
-            reason = `Absent for all ${total} services this month`;
-          }
-        } else if (isChronicLowAttendance) {
-          severity = "warning";
-          reason = `Attended only ${presentCount} of ${total} services (${percent}%)`;
-        } else {
-          severity = "warning";
-          reason = `Missed last ${consecutiveAbsences} services`;
-        }
-
-        return {
-          id: member.id,
-          name: member.name,
-          contact: member.contact || null,
-          household: household?.label ?? "Unknown",
-          total,
-          presentCount,
-          percent,
-          streak: consecutiveAbsences,
-          severity,
-          reason,
-        };
-      })
-      .filter((row): row is NonNullable<typeof row> => Boolean(row))
-      .sort((a, b) => {
-        if (a.severity === "critical" && b.severity !== "critical") return -1;
-        if (b.severity === "critical" && a.severity !== "critical") return 1;
-        return b.streak - a.streak || a.percent - b.percent;
-      })
-      .slice(0, 15);
-  }, [members.data, records, monthServices, households, scope, workerIds, attendance.data]);
+    return computeFollowUpConcerns({
+      members: members.data ?? [],
+      services: monthServices,
+      attendance: attendance.data ?? [],
+      households,
+      workerIds,
+      scope,
+      threshold,
+      chronicPercentLimit,
+    });
+  }, [
+    members.data,
+    monthServices,
+    attendance.data,
+    households,
+    workerIds,
+    scope,
+    threshold,
+    chronicPercentLimit,
+  ]);
 
   const options =
     view === "member"
