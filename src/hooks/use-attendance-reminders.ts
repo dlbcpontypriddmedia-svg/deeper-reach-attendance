@@ -18,6 +18,23 @@ export function useAttendanceReminders() {
 
   const [dismissed, setDismissed] = useState(false);
 
+  // Keep permission state continuously in sync with browser permissions
+  useEffect(() => {
+    if (typeof window === "undefined" || !("Notification" in window)) return;
+
+    const syncPermission = () => {
+      setPermission(Notification.permission);
+    };
+
+    syncPermission();
+    window.addEventListener("focus", syncPermission);
+    window.addEventListener("notification-permission-changed", syncPermission);
+    return () => {
+      window.removeEventListener("focus", syncPermission);
+      window.removeEventListener("notification-permission-changed", syncPermission);
+    };
+  }, []);
+
   // Compute attendance status for today
   const reminderStatus = useMemo(() => {
     const now = new Date();

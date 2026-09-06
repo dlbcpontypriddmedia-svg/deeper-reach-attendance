@@ -64,6 +64,8 @@ export function NotificationPromptModal() {
 
     try {
       const permission = await Notification.requestPermission();
+      window.dispatchEvent(new CustomEvent("notification-permission-changed"));
+
       if (permission === "granted") {
         toast.success("Notifications enabled!", {
           description: "You'll now receive timely Sunday service reminders.",

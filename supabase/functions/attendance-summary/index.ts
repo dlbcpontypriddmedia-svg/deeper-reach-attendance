@@ -184,6 +184,28 @@ Deno.serve(async (req: Request) => {
 
       const service = selectedService;
 
+      // If not forced: check if summary for this specific service has already been sent
+      if (!body.force) {
+        const { data: alreadySentLogs } = await supabase
+          .from("audit_logs")
+          .select("id, created_at")
+          .eq("action", "summary_email_sent")
+          .eq("entity_type", "attendance_summary")
+          .eq("entity_id", service.id)
+          .limit(1);
+
+        if (alreadySentLogs && alreadySentLogs.length > 0) {
+          return new Response(
+            JSON.stringify({
+              message: `Sunday attendance summary for service ${service.name} (${service.date}) was already sent. Skipping duplicate email.`,
+              skipped: true,
+              serviceId: service.id,
+            }),
+            { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 },
+          );
+        }
+      }
+
       const { data: records, error: rErr } = await supabase
         .from("attendance_records")
         .select("status, member_id")
