@@ -20,7 +20,7 @@ import { useAttendanceReminders } from "@/hooks/use-attendance-reminders";
 import { initials } from "@/lib/data";
 import { Button } from "@/components/ui/button";
 import { BrandLockup } from "./Brand";
-import { NotificationPromptModal } from "./NotificationPromptModal";
+import { NotificationPromptModal, triggerNotificationModal } from "./NotificationPromptModal";
 
 const NAV = [
   { to: "/dashboard", label: "Services", icon: CalendarDays },
@@ -68,6 +68,20 @@ export function AppShell({ children }: { children: ReactNode }) {
                 {role === "admin" ? "Admin" : "Attendance taker"}
               </div>
             </div>
+            {permission !== "granted" && (
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Enable notifications"
+                title="Enable attendance reminders"
+                onClick={() => triggerNotificationModal()}
+                className="relative text-depth-foreground hover:bg-sidebar-accent"
+              >
+                <Bell className="h-4 w-4" />
+                <span className="absolute top-2 right-2 h-2 w-2 rounded-full bg-amber-400 animate-ping" />
+                <span className="absolute top-2 right-2 h-2 w-2 rounded-full bg-amber-400" />
+              </Button>
+            )}
             <div className="bg-sidebar-primary text-sidebar-primary-foreground font-display grid h-9 w-9 place-items-center rounded-full text-sm font-semibold">
               {initials(name)}
             </div>

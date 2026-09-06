@@ -4,8 +4,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 
-const DISMISSED_KEY = "attendance_notif_prompt_dismissed_at";
-const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
+const SESSION_DISMISSED_KEY = "attendance_notif_prompt_session_dismissed";
 
 export function NotificationPromptModal() {
   const [open, setOpen] = useState(false);
@@ -14,6 +13,10 @@ export function NotificationPromptModal() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+
+    // Listen for custom open event (e.g. clicking header bell)
+    const handleManualOpen = () => setOpen(true);
+    window.addEventListener("open-notification-prompt", handleManualOpen);
 
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
     const isStandalone =
@@ -24,22 +27,26 @@ export function NotificationPromptModal() {
     if (isIOS && !isStandalone && !("Notification" in window)) {
       setIsIOSWithoutPWA(true);
     } else if ("Notification" in window) {
-      if (Notification.permission === "granted") return;
+      if (Notification.permission === "granted") {
+        return () => window.removeEventListener("open-notification-prompt", handleManualOpen);
+      }
     }
 
-    // Check if recently dismissed
-    const dismissedAt = localStorage.getItem(DISMISSED_KEY);
-    if (dismissedAt) {
-      const timeSince = Date.now() - parseInt(dismissedAt, 10);
-      if (timeSince < THREE_DAYS_MS) return;
+    // Check if user dismissed it in this browser session
+    const sessionDismissed = sessionStorage.getItem(SESSION_DISMISSED_KEY);
+    if (sessionDismissed) {
+      return () => window.removeEventListener("open-notification-prompt", handleManualOpen);
     }
 
-    // Delay slightly after load
+    // Delay 1 second after page load
     const timer = setTimeout(() => {
       setOpen(true);
     }, 1000);
 
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("open-notification-prompt", handleManualOpen);
+    };
   }, []);
 
   const handleEnable = async () => {
@@ -84,7 +91,7 @@ export function NotificationPromptModal() {
   };
 
   const handleDismiss = () => {
-    localStorage.setItem(DISMISSED_KEY, String(Date.now()));
+    sessionStorage.setItem(SESSION_DISMISSED_KEY, "true");
     setOpen(false);
   };
 
@@ -101,7 +108,7 @@ export function NotificationPromptModal() {
 
         <DialogDescription className="text-muted-foreground text-xs sm:text-sm mt-1.5 leading-relaxed">
           {isIOSWithoutPWA
-            ? "To get attendance reminders on iPhone, tap Share (⎋) below and select 'Add to Home Screen'."
+            ? "To get attendance reminders on iPhone, tap Share (⎋) in Safari and select 'Add to Home Screen'."
             : "Get notified on Sundays at 3:00 PM if service attendance has not been recorded yet."}
         </DialogDescription>
 
@@ -142,4 +149,10 @@ export function NotificationPromptModal() {
       </DialogContent>
     </Dialog>
   );
+}
+
+export function triggerNotificationModal() {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("open-notification-prompt"));
+  }
 }
