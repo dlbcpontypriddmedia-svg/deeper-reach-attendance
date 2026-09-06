@@ -49,8 +49,17 @@ Deno.serve(async (req: Request) => {
     const generalSettings = settingsMap["general"] || {};
     const automationSettings = settingsMap["automation"] || settingsMap["cron_jobs"] || {};
 
-    const configuredEmail = generalSettings.pastor_email || "stedarol@gmail.com";
+    const configuredEmail = generalSettings.pastor_email?.trim();
     const recipient = body.targetEmail || configuredEmail;
+
+    if (!recipient) {
+      return new Response(
+        JSON.stringify({
+          error: "No recipient email configured. Please set the Pastor/Leadership Email in Settings.",
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 },
+      );
+    }
 
     const timeZone = "Europe/London";
     const now = new Date();

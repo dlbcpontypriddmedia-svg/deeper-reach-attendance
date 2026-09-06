@@ -2,23 +2,23 @@
 CREATE EXTENSION IF NOT EXISTS pg_net;
 CREATE EXTENSION IF NOT EXISTS pg_cron;
 
--- 1. Sunday Attendance Summary at 5:20 PM (17:20 Europe/London / UTC)
--- Runs every Sunday at 17:20
+-- 1. Sunday Attendance Summary
+-- Invokes edge function which dynamically loads the pastor email and configured schedule from app_settings
 --
 -- SELECT cron.schedule(
---   'sunday-attendance-summary-520pm',
+--   'sunday-attendance-summary',
 --   '20 17 * * 0',
 --   $$
 --   SELECT net.http_post(
 --     url := 'https://rntxinxyttftzhlxpucr.supabase.co/functions/v1/attendance-summary',
 --     headers := '{"Content-Type": "application/json", "Authorization": "Bearer YOUR_SERVICE_ROLE_KEY"}'::jsonb,
---     body := '{"type": "sunday", "targetEmail": "stedarol@gmail.com"}'::jsonb
+--     body := '{"type": "sunday"}'::jsonb
 --   ) AS request_id;
 --   $$
 -- );
 
--- 2. Monthly Attendance Breakdown at the end of every month (e.g. 23:00 on the 28th-31st or 1st of next month)
--- Runs at 21:00 on the last day of every month:
+-- 2. Monthly Attendance Breakdown at the end of every month
+-- Invokes edge function which dynamically loads the pastor email from app_settings
 --
 -- SELECT cron.schedule(
 --   'monthly-attendance-summary',
@@ -27,7 +27,7 @@ CREATE EXTENSION IF NOT EXISTS pg_cron;
 --   SELECT net.http_post(
 --     url := 'https://rntxinxyttftzhlxpucr.supabase.co/functions/v1/attendance-summary',
 --     headers := '{"Content-Type": "application/json", "Authorization": "Bearer YOUR_SERVICE_ROLE_KEY"}'::jsonb,
---     body := '{"type": "monthly", "targetEmail": "stedarol@gmail.com"}'::jsonb
+--     body := '{"type": "monthly"}'::jsonb
 --   ) AS request_id;
 --   $$
 -- );
