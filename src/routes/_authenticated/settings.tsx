@@ -5,15 +5,11 @@ import {
   AlertTriangle,
   Bell,
   Calendar,
-  CheckCircle2,
   Clock,
   Hammer,
   Mail,
   Save,
-  Settings,
-  ShieldCheck,
   Sparkles,
-  Users,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -23,8 +19,7 @@ import {
   updateSetting,
   type AppSettingsMap,
   type GeneralSettings,
-  type CronJobSettings,
-  type FollowUpSettings,
+  type AutomationSettings,
 } from "@/lib/settings";
 import { logActivity } from "@/lib/audit";
 import { PageHeading } from "@/components/app/AppShell";
@@ -39,9 +34,9 @@ export const Route = createFileRoute("/_authenticated/settings")({
   head: () => ({
     meta: [
       { title: "System Settings | Deeper Life Attendance" },
-      { name: "description", content: "Configure cron jobs, pastor email, maintenance mode, and app preferences." },
+      { name: "description", content: "Configure automated summary schedules, pastor email, and maintenance mode." },
       { property: "og:title", content: "System Settings | Deeper Life Attendance" },
-      { property: "og:description", content: "Configure cron jobs, pastor email, maintenance mode, and app preferences." },
+      { property: "og:description", content: "Configure automated summary schedules, pastor email, and maintenance mode." },
     ],
   }),
   component: SettingsPage,
@@ -58,15 +53,13 @@ function SettingsPage() {
   });
 
   const [general, setGeneral] = useState<GeneralSettings | null>(null);
-  const [cronJobs, setCronJobs] = useState<CronJobSettings | null>(null);
-  const [followUp, setFollowUp] = useState<FollowUpSettings | null>(null);
+  const [automation, setAutomation] = useState<AutomationSettings | null>(null);
 
   // Synchronize state when query loads
   useEffect(() => {
     if (settingsQuery.data) {
       setGeneral(settingsQuery.data.general);
-      setCronJobs(settingsQuery.data.cron_jobs);
-      setFollowUp(settingsQuery.data.follow_up);
+      setAutomation(settingsQuery.data.automation);
     }
   }, [settingsQuery.data]);
 
@@ -74,8 +67,7 @@ function SettingsPage() {
     mutationFn: async (payload: AppSettingsMap) => {
       await Promise.all([
         updateSetting("general", payload.general, userId),
-        updateSetting("cron_jobs", payload.cron_jobs, userId),
-        updateSetting("follow_up", payload.follow_up, userId),
+        updateSetting("automation", payload.automation, userId),
       ]);
 
       await logActivity({
@@ -87,8 +79,10 @@ function SettingsPage() {
         details: {
           pastor_email: payload.general.pastor_email,
           maintenance_mode: payload.general.maintenance_mode,
-          sunday_summary_enabled: payload.cron_jobs.sunday_summary_enabled,
-          monthly_report_enabled: payload.cron_jobs.monthly_report_enabled,
+          sunday_summary_time: payload.automation.sunday_summary_time,
+          sunday_reminder_time: payload.automation.sunday_reminder_time,
+          sunday_summary_enabled: payload.automation.sunday_summary_enabled,
+          monthly_report_enabled: payload.automation.monthly_report_enabled,
         },
       });
     },
@@ -101,7 +95,7 @@ function SettingsPage() {
     },
   });
 
-  if (loading || settingsQuery.isLoading || !general || !cronJobs || !followUp) {
+  if (loading || settingsQuery.isLoading || !general || !automation) {
     return (
       <div>
         <PageHeading title="System Settings" subtitle="Configure automated reports, crons, maintenance mode, and notifications." />
@@ -129,16 +123,15 @@ function SettingsPage() {
   const handleSave = () => {
     saveMutation.mutate({
       general,
-      cron_jobs: cronJobs,
-      follow_up: followUp,
+      automation,
     });
   };
 
   return (
-    <div className="space-y-6 max-w-5xl">
+    <div className="space-y-6 max-w-4xl">
       <PageHeading
         title="System Settings"
-        subtitle="Manage automation crons, pastor email destination, maintenance mode, and follow-up thresholds."
+        subtitle="Manage automation delivery times, pastor email destination, and maintenance mode."
         action={
           <Button
             onClick={handleSave}
@@ -168,53 +161,184 @@ function SettingsPage() {
         </div>
       )}
 
-      <div className="grid gap-6 md:grid-cols-2">
-        {/* General & Email Destination */}
+      <div className="grid gap-6">
+        {/* 1. Automated Schedules & Dispatch Times */}
         <Card className="rounded-2xl border-border/70 shadow-xs">
           <CardHeader className="pb-3">
             <div className="flex items-center gap-2.5">
               <div className="bg-primary/10 text-primary p-2 rounded-xl">
-                <Mail className="h-4 w-4" />
+                <Clock className="h-4 w-4" />
               </div>
               <div>
-                <CardTitle className="text-base font-semibold">Leadership Email & Church Details</CardTitle>
-                <CardDescription className="text-xs">Destination email for attendance reports and summaries.</CardDescription>
+                <CardTitle className="text-base font-semibold">Automated Reports & Delivery Times</CardTitle>
+                <CardDescription className="text-xs">
+                  Configure when attendance summaries and taker reminders are sent.
+                </CardDescription>
               </div>
             </div>
           </CardHeader>
-          <CardContent className="space-y-4 pt-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="pastor_email" className="text-xs font-semibold">
-                Pastor / Leadership Email
-              </Label>
-              <Input
-                id="pastor_email"
-                type="email"
-                value={general.pastor_email}
-                onChange={(e) => setGeneral({ ...general, pastor_email: e.target.value })}
-                placeholder="pastor@example.com"
-                className="h-9 text-sm"
-              />
-              <p className="text-[11px] text-muted-foreground">
-                All scheduled Sunday attendance summaries and monthly reports will be dispatched directly to this email address.
-              </p>
+          <CardContent className="space-y-5 pt-2">
+            {/* Sunday Summary Time & Toggle */}
+            <div className="surface p-4 rounded-xl border border-border/60 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="space-y-1 max-w-md">
+                <div className="flex items-center gap-2">
+                  <Calendar className="h-4 w-4 text-primary" />
+                  <span className="font-semibold text-sm">Sunday Attendance Summary</span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Sends the exact breakdown (Adults M/F, Youth M/F, Children M/F, and Total) directly to pastor email.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <div className="space-y-1">
+                  <Label htmlFor="sunday_time" className="text-[11px] font-semibold text-muted-foreground uppercase">
+                    Delivery Time
+                  </Label>
+                  <Input
+                    id="sunday_time"
+                    type="time"
+                    value={automation.sunday_summary_time}
+                    onChange={(e) =>
+                      setAutomation({ ...automation, sunday_summary_time: e.target.value })
+                    }
+                    className="h-9 w-28 text-sm font-medium"
+                  />
+                </div>
+                <div className="space-y-1 flex flex-col items-center">
+                  <Label className="text-[11px] font-semibold text-muted-foreground uppercase">
+                    Status
+                  </Label>
+                  <Switch
+                    checked={automation.sunday_summary_enabled}
+                    onCheckedChange={(val) =>
+                      setAutomation({ ...automation, sunday_summary_enabled: val })
+                    }
+                  />
+                </div>
+              </div>
             </div>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="church_name" className="text-xs font-semibold">
-                Church / Branch Name
-              </Label>
-              <Input
-                id="church_name"
-                value={general.church_name}
-                onChange={(e) => setGeneral({ ...general, church_name: e.target.value })}
-                className="h-9 text-sm"
-              />
+            {/* Sunday Reminder Time & Toggle */}
+            <div className="surface p-4 rounded-xl border border-border/60 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="space-y-1 max-w-md">
+                <div className="flex items-center gap-2">
+                  <Bell className="h-4 w-4 text-amber-500" />
+                  <span className="font-semibold text-sm">Sunday Attendance Pending Reminder</span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Alerts attendance takers if Sunday service attendance has not been submitted yet.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <div className="space-y-1">
+                  <Label htmlFor="reminder_time" className="text-[11px] font-semibold text-muted-foreground uppercase">
+                    Reminder Time
+                  </Label>
+                  <Input
+                    id="reminder_time"
+                    type="time"
+                    value={automation.sunday_reminder_time}
+                    onChange={(e) =>
+                      setAutomation({ ...automation, sunday_reminder_time: e.target.value })
+                    }
+                    className="h-9 w-28 text-sm font-medium"
+                  />
+                </div>
+                <div className="space-y-1 flex flex-col items-center">
+                  <Label className="text-[11px] font-semibold text-muted-foreground uppercase">
+                    Status
+                  </Label>
+                  <Switch
+                    checked={automation.sunday_reminder_enabled}
+                    onCheckedChange={(val) =>
+                      setAutomation({ ...automation, sunday_reminder_enabled: val })
+                    }
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Monthly Breakdown Report */}
+            <div className="surface p-4 rounded-xl border border-border/60 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="space-y-1 max-w-md">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-indigo-500" />
+                  <span className="font-semibold text-sm">Monthly Attendance Report (End of Month)</span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Sends comprehensive monthly breakdown to pastor email with church worker fidelity prioritized at the top.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-4">
+                <div className="space-y-1 flex flex-col items-center">
+                  <Label className="text-[11px] font-semibold text-muted-foreground uppercase">
+                    Status
+                  </Label>
+                  <Switch
+                    checked={automation.monthly_report_enabled}
+                    onCheckedChange={(val) =>
+                      setAutomation({ ...automation, monthly_report_enabled: val })
+                    }
+                  />
+                </div>
+              </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* Maintenance Mode & Operations */}
+        {/* 2. Email Destination & Church Details */}
+        <Card className="rounded-2xl border-border/70 shadow-xs">
+          <CardHeader className="pb-3">
+            <div className="flex items-center gap-2.5">
+              <div className="bg-blue-500/10 text-blue-600 dark:text-blue-400 p-2 rounded-xl">
+                <Mail className="h-4 w-4" />
+              </div>
+              <div>
+                <CardTitle className="text-base font-semibold">Leadership Email & Church Information</CardTitle>
+                <CardDescription className="text-xs">
+                  Where automated attendance reports and summaries will be sent.
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4 pt-2">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="pastor_email" className="text-xs font-semibold">
+                  Pastor / Leadership Email Address
+                </Label>
+                <Input
+                  id="pastor_email"
+                  type="email"
+                  value={general.pastor_email}
+                  onChange={(e) => setGeneral({ ...general, pastor_email: e.target.value })}
+                  placeholder="pastor@example.com"
+                  className="h-9 text-sm"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  All Sunday summaries and monthly reports are delivered directly to this address.
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="church_name" className="text-xs font-semibold">
+                  Church / Branch Name
+                </Label>
+                <Input
+                  id="church_name"
+                  value={general.church_name}
+                  onChange={(e) => setGeneral({ ...general, church_name: e.target.value })}
+                  className="h-9 text-sm"
+                />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* 3. Maintenance Mode */}
         <Card className="rounded-2xl border-border/70 shadow-xs">
           <CardHeader className="pb-3">
             <div className="flex items-center gap-2.5">
@@ -223,7 +347,9 @@ function SettingsPage() {
               </div>
               <div>
                 <CardTitle className="text-base font-semibold">Maintenance Mode</CardTitle>
-                <CardDescription className="text-xs">Temporarily pause non-admin app usage for updates.</CardDescription>
+                <CardDescription className="text-xs">
+                  Temporarily pause non-admin attendance entry while performing maintenance.
+                </CardDescription>
               </div>
             </div>
           </CardHeader>
@@ -234,7 +360,7 @@ function SettingsPage() {
                   Enable Maintenance Mode
                 </Label>
                 <p className="text-xs text-muted-foreground">
-                  Restricts attendance submissions while you perform audits or upgrades.
+                  Displays maintenance notice to attendance takers during database or system upgrades.
                 </p>
               </div>
               <Switch
@@ -258,149 +384,6 @@ function SettingsPage() {
                 />
               </div>
             )}
-          </CardContent>
-        </Card>
-
-        {/* Automation & Cron Schedulers */}
-        <Card className="rounded-2xl border-border/70 shadow-xs md:col-span-2">
-          <CardHeader className="pb-3">
-            <div className="flex items-center gap-2.5">
-              <div className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 p-2 rounded-xl">
-                <Clock className="h-4 w-4" />
-              </div>
-              <div>
-                <CardTitle className="text-base font-semibold">Automated Cron Jobs & Reports</CardTitle>
-                <CardDescription className="text-xs">Turn specific background schedules on or off.</CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4 pt-2">
-            <div className="grid gap-3 sm:grid-cols-2">
-              {/* Sunday 5:20 PM Summary */}
-              <div className="surface p-4 rounded-xl border border-border/60 flex items-start justify-between gap-3">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <Calendar className="h-4 w-4 text-primary" />
-                    <span className="font-semibold text-sm">Sunday 5:20 PM Summary</span>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Dispatches exact breakdown text: Adults (M/F), Youth (M/F), Children (M/F) + Total to pastor email.
-                  </p>
-                </div>
-                <Switch
-                  checked={cronJobs.sunday_summary_enabled}
-                  onCheckedChange={(val) => setCronJobs({ ...cronJobs, sunday_summary_enabled: val })}
-                />
-              </div>
-
-              {/* Sunday 3:00 PM Reminder */}
-              <div className="surface p-4 rounded-xl border border-border/60 flex items-start justify-between gap-3">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <Bell className="h-4 w-4 text-amber-500" />
-                    <span className="font-semibold text-sm">Sunday 3:00 PM Reminder</span>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Notifies attendance takers if Sunday attendance is still pending at 3:00 PM.
-                  </p>
-                </div>
-                <Switch
-                  checked={cronJobs.sunday_reminder_enabled}
-                  onCheckedChange={(val) => setCronJobs({ ...cronJobs, sunday_reminder_enabled: val })}
-                />
-              </div>
-
-              {/* Monthly Attendance Breakdown */}
-              <div className="surface p-4 rounded-xl border border-border/60 flex items-start justify-between gap-3">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <Sparkles className="h-4 w-4 text-indigo-500" />
-                    <span className="font-semibold text-sm">Monthly End-of-Month Report</span>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Sends detailed monthly member fidelity statistics and participation rates.
-                  </p>
-                </div>
-                <Switch
-                  checked={cronJobs.monthly_report_enabled}
-                  onCheckedChange={(val) => setCronJobs({ ...cronJobs, monthly_report_enabled: val })}
-                />
-              </div>
-
-              {/* Worker Prioritization */}
-              <div className="surface p-4 rounded-xl border border-border/60 flex items-start justify-between gap-3">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <ShieldCheck className="h-4 w-4 text-emerald-500" />
-                    <span className="font-semibold text-sm">Prioritize Workers in Monthly Report</span>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Groups church workers into a prominent top section in the report with [WORKER] tags.
-                  </p>
-                </div>
-                <Switch
-                  checked={cronJobs.monthly_report_prioritize_workers}
-                  onCheckedChange={(val) => setCronJobs({ ...cronJobs, monthly_report_prioritize_workers: val })}
-                />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Urgent Follow-Up Config */}
-        <Card className="rounded-2xl border-border/70 shadow-xs md:col-span-2">
-          <CardHeader className="pb-3">
-            <div className="flex items-center gap-2.5">
-              <div className="bg-rose-500/10 text-rose-600 dark:text-rose-400 p-2 rounded-xl">
-                <Users className="h-4 w-4" />
-              </div>
-              <div>
-                <CardTitle className="text-base font-semibold">Urgent Follow-Up Preferences</CardTitle>
-                <CardDescription className="text-xs">Configure criteria for urgent member alerts and ads-style modal popup.</CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4 pt-2">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="flex items-center justify-between gap-4 p-3 surface rounded-xl border border-border/60">
-                <div className="space-y-0.5">
-                  <Label htmlFor="popup_toggle" className="text-sm font-semibold cursor-pointer">
-                    Urgent Alert Modal Popup
-                  </Label>
-                  <p className="text-xs text-muted-foreground">
-                    Automatically prompt taker/admin on session load when members have missed 3+ consecutive services.
-                  </p>
-                </div>
-                <Switch
-                  id="popup_toggle"
-                  checked={followUp.popup_alert_enabled}
-                  onCheckedChange={(checked) => setFollowUp({ ...followUp, popup_alert_enabled: checked })}
-                />
-              </div>
-
-              <div className="p-3 surface rounded-xl border border-border/60 space-y-1.5">
-                <Label htmlFor="threshold_input" className="text-xs font-semibold">
-                  Consecutive Absences to Trigger Alert
-                </Label>
-                <div className="flex items-center gap-2">
-                  <Input
-                    id="threshold_input"
-                    type="number"
-                    min={2}
-                    max={10}
-                    value={followUp.consecutive_absence_threshold}
-                    onChange={(e) =>
-                      setFollowUp({
-                        ...followUp,
-                        consecutive_absence_threshold: parseInt(e.target.value || "3", 10),
-                      })
-                    }
-                    className="h-8 text-sm w-24"
-                  />
-                  <span className="text-xs text-muted-foreground">services in a row</span>
-                </div>
-              </div>
-            </div>
           </CardContent>
         </Card>
       </div>

@@ -7,25 +7,18 @@ export interface GeneralSettings {
   maintenance_message: string;
 }
 
-export interface CronJobSettings {
+export interface AutomationSettings {
   sunday_summary_enabled: boolean;
-  sunday_summary_time: string;
+  sunday_summary_time: string; // e.g. "17:20"
   sunday_reminder_enabled: boolean;
-  sunday_reminder_time: string;
+  sunday_reminder_time: string; // e.g. "15:00"
   monthly_report_enabled: boolean;
-  monthly_report_prioritize_workers: boolean;
-}
-
-export interface FollowUpSettings {
-  consecutive_absence_threshold: number;
-  popup_alert_enabled: boolean;
-  chronic_absence_rate_percent: number;
+  monthly_report_day: string; // "last_day" | "first_day"
 }
 
 export interface AppSettingsMap {
   general: GeneralSettings;
-  cron_jobs: CronJobSettings;
-  follow_up: FollowUpSettings;
+  automation: AutomationSettings;
 }
 
 export const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
@@ -35,19 +28,13 @@ export const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
   maintenance_message: "System is currently undergoing scheduled maintenance. Please check back shortly.",
 };
 
-export const DEFAULT_CRON_SETTINGS: CronJobSettings = {
+export const DEFAULT_AUTOMATION_SETTINGS: AutomationSettings = {
   sunday_summary_enabled: true,
   sunday_summary_time: "17:20",
   sunday_reminder_enabled: true,
   sunday_reminder_time: "15:00",
   monthly_report_enabled: true,
-  monthly_report_prioritize_workers: true,
-};
-
-export const DEFAULT_FOLLOW_UP_SETTINGS: FollowUpSettings = {
-  consecutive_absence_threshold: 3,
-  popup_alert_enabled: true,
-  chronic_absence_rate_percent: 40,
+  monthly_report_day: "last_day",
 };
 
 export async function fetchAllSettings(): Promise<AppSettingsMap> {
@@ -55,15 +42,17 @@ export async function fetchAllSettings(): Promise<AppSettingsMap> {
 
   const result: AppSettingsMap = {
     general: { ...DEFAULT_GENERAL_SETTINGS },
-    cron_jobs: { ...DEFAULT_CRON_SETTINGS },
-    follow_up: { ...DEFAULT_FOLLOW_UP_SETTINGS },
+    automation: { ...DEFAULT_AUTOMATION_SETTINGS },
   };
 
   if (!error && data) {
     for (const row of data as any[]) {
-      if (row.id === "general") result.general = { ...DEFAULT_GENERAL_SETTINGS, ...row.value };
-      if (row.id === "cron_jobs") result.cron_jobs = { ...DEFAULT_CRON_SETTINGS, ...row.value };
-      if (row.id === "follow_up") result.follow_up = { ...DEFAULT_FOLLOW_UP_SETTINGS, ...row.value };
+      if (row.id === "general") {
+        result.general = { ...DEFAULT_GENERAL_SETTINGS, ...row.value };
+      }
+      if (row.id === "automation" || row.id === "cron_jobs") {
+        result.automation = { ...DEFAULT_AUTOMATION_SETTINGS, ...row.value };
+      }
     }
   }
 

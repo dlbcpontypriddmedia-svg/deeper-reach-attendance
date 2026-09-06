@@ -47,7 +47,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const generalSettings = settingsMap["general"] || {};
-    const cronSettings = settingsMap["cron_jobs"] || {};
+    const automationSettings = settingsMap["automation"] || settingsMap["cron_jobs"] || {};
 
     const configuredEmail = generalSettings.pastor_email || "stedarol@gmail.com";
     const recipient = body.targetEmail || configuredEmail;
@@ -80,13 +80,13 @@ Deno.serve(async (req: Request) => {
 
     // Check if report cron is enabled in settings
     if (!body.force) {
-      if (reportType === "sunday" && cronSettings.sunday_summary_enabled === false) {
+      if (reportType === "sunday" && automationSettings.sunday_summary_enabled === false) {
         return new Response(
           JSON.stringify({ message: "Sunday summary email is disabled in settings.", skipped: true }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 },
         );
       }
-      if (reportType === "monthly" && cronSettings.monthly_report_enabled === false) {
+      if (reportType === "monthly" && automationSettings.monthly_report_enabled === false) {
         return new Response(
           JSON.stringify({ message: "Monthly summary report is disabled in settings.", skipped: true }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 },

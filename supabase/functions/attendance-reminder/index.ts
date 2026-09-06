@@ -68,11 +68,11 @@ Deno.serve(async (req: Request) => {
         settingsMap[row.id] = row.value;
       }
     }
-    const cronSettings = settingsMap["cron_jobs"] || {};
+    const automationSettings = settingsMap["automation"] || settingsMap["cron_jobs"] || {};
 
     // If not forced: check if Sunday and if reminder is enabled in settings
     if (!body.force) {
-      if (cronSettings.sunday_reminder_enabled === false) {
+      if (automationSettings.sunday_reminder_enabled === false) {
         return new Response(
           JSON.stringify({ message: "Sunday reminder is disabled in settings.", skipped: true }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 },
