@@ -147,7 +147,7 @@ function ReportsPage() {
   const concerns = useMemo(() => {
     return computeFollowUpConcerns({
       members: members.data ?? [],
-      services: monthServices,
+      services: services ?? [],
       attendance: attendance.data ?? [],
       households,
       workerIds,
@@ -157,7 +157,7 @@ function ReportsPage() {
     });
   }, [
     members.data,
-    monthServices,
+    services,
     attendance.data,
     households,
     workerIds,

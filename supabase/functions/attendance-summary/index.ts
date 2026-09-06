@@ -109,6 +109,7 @@ Deno.serve(async (req: Request) => {
     if (reportType === "sunday") {
       let targetDate = body.date || todayStr;
 
+      // 1. Check services on the target date
       let { data: services, error: sErr } = await supabase
         .from("services")
         .select("*")
@@ -116,27 +117,72 @@ Deno.serve(async (req: Request) => {
 
       if (sErr) throw new Error(`Error fetching services: ${sErr.message}`);
 
-      // If no services on target date (e.g. today has no services yet or test trigger), fetch the latest service
-      if (!services || services.length === 0) {
+      // If multiple or single services on target date, check which one has attendance taken
+      let selectedService = null;
+      if (services && services.length > 0) {
+        for (const s of services) {
+          const { count } = await supabase
+            .from("attendance_records")
+            .select("*", { count: "exact", head: true })
+            .eq("service_id", s.id);
+
+          if (count && count > 0) {
+            selectedService = s;
+            break;
+          }
+        }
+
+        // If today has a service but NO attendance records have been submitted yet
+        if (!selectedService && !body.force) {
+          return new Response(
+            JSON.stringify({
+              message: `Service exists for ${targetDate} (${services[0].name}) but attendance has not been submitted yet. Summary skipped until attendance is recorded.`,
+              skipped: true,
+              serviceId: services[0].id,
+            }),
+            { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 },
+          );
+        }
+
+        if (!selectedService) {
+          selectedService = services[0];
+        }
+      }
+
+      // If no services on target date (e.g. test manual trigger or backfill), fetch the latest service with recorded attendance
+      if (!selectedService) {
         const { data: latestServices } = await supabase
           .from("services")
           .select("*")
           .order("date", { ascending: false })
-          .limit(1);
+          .limit(10);
 
         if (latestServices && latestServices.length > 0) {
-          services = latestServices;
+          for (const ls of latestServices) {
+            const { count } = await supabase
+              .from("attendance_records")
+              .select("*", { count: "exact", head: true })
+              .eq("service_id", ls.id);
+
+            if (count && count > 0) {
+              selectedService = ls;
+              break;
+            }
+          }
+          if (!selectedService) {
+            selectedService = latestServices[0];
+          }
         }
       }
 
-      if (!services || services.length === 0) {
+      if (!selectedService) {
         return new Response(
           JSON.stringify({ message: "No services found in database.", date: targetDate }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 },
         );
       }
 
-      const service = services[0];
+      const service = selectedService;
 
       const { data: records, error: rErr } = await supabase
         .from("attendance_records")
