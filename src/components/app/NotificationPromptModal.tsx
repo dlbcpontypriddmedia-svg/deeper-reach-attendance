@@ -1,12 +1,11 @@
 import { useEffect, useState } from "react";
-import { Bell, BellRing, CheckCircle2, ShieldCheck, X } from "lucide-react";
+import { Bell } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
 
@@ -79,83 +78,36 @@ export function NotificationPromptModal() {
 
   return (
     <Dialog open={open} onOpenChange={(val) => !val && handleDismiss()}>
-      <DialogContent className="max-w-md p-0 overflow-hidden border-border/80 shadow-2xl rounded-2xl">
-        {/* Header Visual with Gradient and Pulsing Bell */}
-        <div className="bg-depth-gradient text-white p-6 text-center relative">
-          <button
-            type="button"
-            onClick={handleDismiss}
-            aria-label="Close"
-            className="absolute top-4 right-4 text-white/70 hover:text-white transition-colors p-1 rounded-full hover:bg-white/10"
-          >
-            <X className="h-5 w-5" />
-          </button>
-
-          <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-2xl bg-white/15 backdrop-blur-md shadow-inner">
-            <BellRing className="h-8 w-8 text-white animate-bounce" />
-          </div>
-
-          <DialogTitle className="text-xl font-bold tracking-tight text-white">
-            Never Miss Sunday Attendance
-          </DialogTitle>
-          <DialogDescription className="text-white/80 text-xs sm:text-sm mt-1 max-w-xs mx-auto">
-            Enable notifications to get automatic reminders when attendance has not been recorded.
-          </DialogDescription>
+      <DialogContent className="max-w-sm p-6 text-center rounded-2xl">
+        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+          <Bell className="h-7 w-7 animate-bounce" />
         </div>
 
-        {/* Benefits List */}
-        <div className="p-6 space-y-4">
-          <ul className="space-y-3 text-xs sm:text-sm text-foreground">
-            <li className="flex items-start gap-2.5">
-              <div className="rounded-full bg-primary/10 p-1 text-primary shrink-0 mt-0.5">
-                <CheckCircle2 className="h-4 w-4" />
-              </div>
-              <span>
-                <strong>Sunday 3:00 PM Alerts:</strong> Timely reminder if Sunday attendance is
-                still unsubmitted.
-              </span>
-            </li>
-            <li className="flex items-start gap-2.5">
-              <div className="rounded-full bg-primary/10 p-1 text-primary shrink-0 mt-0.5">
-                <CheckCircle2 className="h-4 w-4" />
-              </div>
-              <span>
-                <strong>Instant 1-Click Access:</strong> Click any notification to open the
-                attendance form directly.
-              </span>
-            </li>
-            <li className="flex items-start gap-2.5">
-              <div className="rounded-full bg-primary/10 p-1 text-primary shrink-0 mt-0.5">
-                <ShieldCheck className="h-4 w-4" />
-              </div>
-              <span>
-                <strong>Smart & Quiet:</strong> Automatically pauses as soon as attendance is
-                submitted.
-              </span>
-            </li>
-          </ul>
+        <DialogTitle className="text-lg font-bold">
+          Enable Attendance Reminders
+        </DialogTitle>
+        <DialogDescription className="text-muted-foreground text-xs sm:text-sm mt-1.5 leading-relaxed">
+          Get notified on Sundays at 3:00 PM if service attendance has not been recorded yet.
+        </DialogDescription>
 
-          {/* Action Buttons */}
-          <div className="pt-2 flex flex-col gap-2">
-            <Button
-              size="lg"
-              className="h-12 w-full text-sm font-semibold shadow-md gap-2"
-              onClick={handleEnable}
-              disabled={loading}
-            >
-              <Bell className="h-4 w-4" />
-              {loading ? "Requesting..." : "Enable Notifications"}
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="text-muted-foreground hover:text-foreground text-xs"
-              onClick={handleDismiss}
-            >
-              Maybe Later
-            </Button>
-          </div>
+        <div className="mt-5 flex flex-col gap-2">
+          <Button
+            size="lg"
+            className="h-11 w-full text-sm font-semibold shadow-sm"
+            onClick={handleEnable}
+            disabled={loading}
+          >
+            {loading ? "Enabling..." : "Enable Notifications"}
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="text-muted-foreground text-xs h-9"
+            onClick={handleDismiss}
+          >
+            Maybe Later
+          </Button>
         </div>
       </DialogContent>
     </Dialog>
